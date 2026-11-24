@@ -26,6 +26,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ProvidersModule } from './modules/providers/providers.module.js';
 import { QuotationsModule } from './modules/quotations/quotations.module.js';
 import { ReviewsModule } from './modules/reviews/reviews.module.js';
+import { SearchModule } from './modules/search/search.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 
 /** True for handlers marked with `@SensitiveRateLimit()`. */
@@ -62,6 +63,7 @@ const isSensitiveRoute = (context: ExecutionContext): boolean =>
     AddressesModule,
     CatalogModule,
     ProvidersModule,
+    SearchModule,
     BookingsModule,
     QuotationsModule,
     ReviewsModule,
