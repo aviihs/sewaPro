@@ -2,12 +2,14 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
 import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
 import { SkipThrottle } from '@nestjs/throttler';
+import { Public } from '../../common/auth/auth.decorators.js';
 import { ApiEnvelopeResponse } from '../../common/decorators/api-envelope-response.decorator.js';
 import { ErrorResponseDto } from '../../common/dto/error-response.dto.js';
 import { HealthCheckDto } from './health-check.dto.js';
 import { PrismaHealthIndicator } from './prisma.health-indicator.js';
 
 @ApiTags('Health')
+@Public()
 @SkipThrottle()
 @Controller('health')
 export class HealthController {

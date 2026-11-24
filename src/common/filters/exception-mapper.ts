@@ -18,6 +18,7 @@ const STATUS_BY_KIND: Readonly<Record<DomainErrorKind, HttpStatus>> = {
   NOT_FOUND: HttpStatus.NOT_FOUND,
   CONFLICT: HttpStatus.CONFLICT,
   BUSINESS_RULE: HttpStatus.UNPROCESSABLE_ENTITY,
+  RATE_LIMITED: HttpStatus.TOO_MANY_REQUESTS,
 };
 
 const CODE_BY_STATUS: Readonly<Partial<Record<number, HttpErrorCode>>> = {

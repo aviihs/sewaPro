@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { validateEnv } from './env.schema.js';
 
-const base = { DATABASE_URL: 'postgresql://u@localhost:5432/db' };
+const SECRET = 'x'.repeat(32);
+const base = {
+  DATABASE_URL: 'postgresql://u@localhost:5432/db',
+  JWT_ACCESS_SECRET: SECRET,
+  OTP_PEPPER: SECRET,
+  STORAGE_SIGNING_SECRET: SECRET,
+};
 
 describe('validateEnv', () => {
   it('applies defaults and parses lists/booleans', () => {
@@ -23,6 +29,10 @@ describe('validateEnv', () => {
   it('refuses to boot without a valid postgres URL', () => {
     expect(() => validateEnv({ DATABASE_URL: 'mysql://x' })).toThrow(/DATABASE_URL/);
     expect(() => validateEnv({})).toThrow(/Invalid environment configuration/);
+  });
+
+  it('rejects short secrets', () => {
+    expect(() => validateEnv({ ...base, JWT_ACCESS_SECRET: 'short' })).toThrow(/JWT_ACCESS_SECRET/);
   });
 
   it('rejects malformed numbers and booleans', () => {

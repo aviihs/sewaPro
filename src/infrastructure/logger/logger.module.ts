@@ -8,6 +8,15 @@ const REQUEST_ID_HEADER = 'x-request-id';
 const SAFE_REQUEST_ID = /^[A-Za-z0-9_-]{8,64}$/;
 const UNLOGGED_PATHS = /\/health(\/|$)/;
 
+/** Query strings that carry credentials (signed file URLs) are never written to logs. */
+const SENSITIVE_QUERY_PATHS = /\/files\//;
+
+export function loggableUrl(url: string): string {
+  const queryStart = url.indexOf('?');
+  if (queryStart === -1 || !SENSITIVE_QUERY_PATHS.test(url.slice(0, queryStart))) return url;
+  return `${url.slice(0, queryStart)}?[REDACTED]`;
+}
+
 /** Reuses a well-formed inbound X-Request-Id, otherwise generates one; echoes it back. */
 export function resolveRequestId(req: IncomingMessage, res: ServerResponse): string {
   const inbound = req.headers[REQUEST_ID_HEADER];
@@ -38,7 +47,7 @@ export function resolveRequestId(req: IncomingMessage, res: ServerResponse): str
             req: (req: { id: string; method: string; url: string }) => ({
               id: req.id,
               method: req.method,
-              url: req.url,
+              url: loggableUrl(req.url),
             }),
             res: (res: { statusCode: number }) => ({ statusCode: res.statusCode }),
           },

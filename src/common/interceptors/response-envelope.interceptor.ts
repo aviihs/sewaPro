@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { type Observable, map } from 'rxjs';
 import { type SuccessEnvelope } from '../http/envelope.js';
+import { CursorPage } from '../utils/cursor.js';
 import { PaginatedResult } from '../utils/pagination.js';
 
 /** Wraps every successful response as `{ success: true, data, meta? }`. */
@@ -20,7 +21,7 @@ export class ResponseEnvelopeInterceptor<T> implements NestInterceptor<
   ): Observable<SuccessEnvelope<unknown>> {
     return next.handle().pipe(
       map((payload): SuccessEnvelope<unknown> => {
-        if (payload instanceof PaginatedResult) {
+        if (payload instanceof PaginatedResult || payload instanceof CursorPage) {
           return { success: true, data: payload.items, meta: payload.meta };
         }
         return { success: true, data: payload ?? null };

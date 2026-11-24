@@ -15,6 +15,9 @@ const commaList = z
       .filter((item) => item.length > 0),
   );
 
+/** Secrets must be long random strings (e.g. `openssl rand -base64 48`). */
+const secret = z.string().min(32, 'must be at least 32 characters');
+
 export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -35,9 +38,22 @@ export const envSchema = z
     THROTTLE_TTL_MS: z.coerce.number().int().min(1000).default(60000),
     THROTTLE_LIMIT: z.coerce.number().int().min(1).default(100),
 
+    SENSITIVE_THROTTLE_TTL_MS: z.coerce.number().int().min(1000).default(60000),
+    SENSITIVE_THROTTLE_LIMIT: z.coerce.number().int().min(1).default(10),
+
     SWAGGER_ENABLED: booleanString,
     SWAGGER_USER: z.string().min(1).optional(),
     SWAGGER_PASSWORD: z.string().min(12).optional(),
+
+    JWT_ACCESS_SECRET: secret,
+    JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+    REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+    OTP_PEPPER: secret,
+
+    PUBLIC_BASE_URL: z.url().default('http://localhost:3000'),
+    STORAGE_DIR: z.string().min(1).default('./storage'),
+    STORAGE_SIGNING_SECRET: secret,
+    SIGNED_URL_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
   })
   .superRefine((env, ctx) => {
     const protectedDocs = env.NODE_ENV === 'production' && env.SWAGGER_ENABLED;

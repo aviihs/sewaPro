@@ -53,3 +53,37 @@ export function ApiPaginatedResponse(
     }),
   );
 }
+
+/** Documents a `{ success: true, data: Model[], meta: { limit, nextCursor, hasMore } }` response. */
+export function ApiCursorPaginatedResponse(
+  model: Type,
+  description: string,
+): MethodDecorator & ClassDecorator {
+  return applyDecorators(
+    ApiExtraModels(model),
+    ApiResponse({
+      status: HttpStatus.OK,
+      description,
+      schema: {
+        type: 'object',
+        required: ['success', 'data', 'meta'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          data: { type: 'array', items: { $ref: getSchemaPath(model) } },
+          meta: {
+            type: 'object',
+            properties: {
+              limit: { type: 'integer', example: 20 },
+              nextCursor: {
+                type: 'string',
+                nullable: true,
+                example: 'MjAzMC0wMS0wN1QxMDowMDowMC4wMDBafDAxOTM',
+              },
+              hasMore: { type: 'boolean', example: true },
+            },
+          },
+        },
+      },
+    }),
+  );
+}

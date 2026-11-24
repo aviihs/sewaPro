@@ -3,7 +3,13 @@
  * one HTTP status, so use cases never deal with HTTP.
  */
 export type DomainErrorKind =
-  'VALIDATION' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'NOT_FOUND' | 'CONFLICT' | 'BUSINESS_RULE';
+  | 'VALIDATION'
+  | 'UNAUTHORIZED'
+  | 'FORBIDDEN'
+  | 'NOT_FOUND'
+  | 'CONFLICT'
+  | 'BUSINESS_RULE'
+  | 'RATE_LIMITED';
 
 export type DomainErrorDetails = Readonly<Record<string, unknown>>;
 

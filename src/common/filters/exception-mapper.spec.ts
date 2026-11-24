@@ -29,6 +29,7 @@ describe('mapException', () => {
     ['NOT_FOUND', HttpStatus.NOT_FOUND],
     ['CONFLICT', HttpStatus.CONFLICT],
     ['BUSINESS_RULE', HttpStatus.UNPROCESSABLE_ENTITY],
+    ['RATE_LIMITED', HttpStatus.TOO_MANY_REQUESTS],
   ])('maps domain error kind %s to HTTP %d', (kind, status) => {
     expect(mapException(new TestDomainError(kind))).toEqual({
       status,

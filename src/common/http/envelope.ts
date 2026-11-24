@@ -1,9 +1,10 @@
+import { type CursorMeta } from '../utils/cursor.js';
 import { type PaginationMeta } from '../utils/pagination.js';
 
 export interface SuccessEnvelope<T> {
   readonly success: true;
   readonly data: T;
-  readonly meta?: PaginationMeta;
+  readonly meta?: PaginationMeta | CursorMeta;
 }
 
 export interface ErrorEnvelope {

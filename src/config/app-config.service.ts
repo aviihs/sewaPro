@@ -8,6 +8,20 @@ export interface DatabaseConfig {
   readonly idleTimeoutMs: number;
 }
 
+export interface AuthConfig {
+  readonly accessSecret: string;
+  readonly accessTtlSeconds: number;
+  readonly refreshTtlDays: number;
+  readonly otpPepper: string;
+}
+
+export interface StorageConfig {
+  readonly dir: string;
+  readonly signingSecret: string;
+  readonly signedUrlTtlSeconds: number;
+  readonly publicBaseUrl: string;
+}
+
 export interface SwaggerConfig {
   readonly enabled: boolean;
   readonly credentials: { readonly user: string; readonly password: string } | null;
@@ -52,6 +66,32 @@ export class AppConfigService {
 
   get throttle(): { readonly ttlMs: number; readonly limit: number } {
     return { ttlMs: this.get('THROTTLE_TTL_MS'), limit: this.get('THROTTLE_LIMIT') };
+  }
+
+  /** Stricter limit for credential and OTP endpoints. */
+  get sensitiveThrottle(): { readonly ttlMs: number; readonly limit: number } {
+    return {
+      ttlMs: this.get('SENSITIVE_THROTTLE_TTL_MS'),
+      limit: this.get('SENSITIVE_THROTTLE_LIMIT'),
+    };
+  }
+
+  get auth(): AuthConfig {
+    return {
+      accessSecret: this.get('JWT_ACCESS_SECRET'),
+      accessTtlSeconds: this.get('JWT_ACCESS_TTL_SECONDS'),
+      refreshTtlDays: this.get('REFRESH_TOKEN_TTL_DAYS'),
+      otpPepper: this.get('OTP_PEPPER'),
+    };
+  }
+
+  get storage(): StorageConfig {
+    return {
+      dir: this.get('STORAGE_DIR'),
+      signingSecret: this.get('STORAGE_SIGNING_SECRET'),
+      signedUrlTtlSeconds: this.get('SIGNED_URL_TTL_SECONDS'),
+      publicBaseUrl: this.get('PUBLIC_BASE_URL'),
+    };
   }
 
   get database(): DatabaseConfig {

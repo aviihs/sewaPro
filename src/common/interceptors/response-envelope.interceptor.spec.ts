@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { type CallHandler, type ExecutionContext } from '@nestjs/common';
 import { firstValueFrom, of } from 'rxjs';
+import { CursorPage } from '../utils/cursor.js';
 import { PaginatedResult } from '../utils/pagination.js';
 import { ResponseEnvelopeInterceptor } from './response-envelope.interceptor.js';
 
@@ -18,6 +19,16 @@ describe('ResponseEnvelopeInterceptor', () => {
   it('turns undefined into null data', async () => {
     const result = await firstValueFrom(interceptor.intercept(context, handlerOf(undefined)));
     expect(result).toEqual({ success: true, data: null });
+  });
+
+  it('unwraps cursor pages into data + cursor meta', async () => {
+    const page = CursorPage.fromRows([{ id: 'a' }], 20, () => ({ createdAt: new Date(), id: 'a' }));
+    const result = await firstValueFrom(interceptor.intercept(context, handlerOf(page)));
+    expect(result).toEqual({
+      success: true,
+      data: [{ id: 'a' }],
+      meta: { limit: 20, nextCursor: null, hasMore: false },
+    });
   });
 
   it('unwraps paginated results into data + meta', async () => {

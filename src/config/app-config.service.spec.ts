@@ -4,7 +4,14 @@ import { AppConfigService } from './app-config.service.js';
 import { type Env, validateEnv } from './env.schema.js';
 
 function serviceFor(raw: Record<string, string>): AppConfigService {
-  const env = validateEnv({ DATABASE_URL: 'postgresql://u@localhost:5432/db', ...raw });
+  const secret = 's'.repeat(32);
+  const env = validateEnv({
+    DATABASE_URL: 'postgresql://u@localhost:5432/db',
+    JWT_ACCESS_SECRET: secret,
+    OTP_PEPPER: secret,
+    STORAGE_SIGNING_SECRET: secret,
+    ...raw,
+  });
   const config = { get: (key: keyof Env) => env[key] } as unknown as ConfigService<Env, true>;
   return new AppConfigService(config);
 }
@@ -36,6 +43,23 @@ describe('AppConfigService', () => {
       poolMax: 10,
       idleTimeoutMs: 30000,
     });
+  });
+
+  it('exposes auth, storage and sensitive throttle settings with defaults', () => {
+    const config = serviceFor({});
+    expect(config.auth).toEqual({
+      accessSecret: 's'.repeat(32),
+      accessTtlSeconds: 900,
+      refreshTtlDays: 30,
+      otpPepper: 's'.repeat(32),
+    });
+    expect(config.storage).toEqual({
+      dir: './storage',
+      signingSecret: 's'.repeat(32),
+      signedUrlTtlSeconds: 300,
+      publicBaseUrl: 'http://localhost:3000',
+    });
+    expect(config.sensitiveThrottle).toEqual({ ttlMs: 60000, limit: 10 });
   });
 
   it('always enables unprotected docs outside production', () => {

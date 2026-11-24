@@ -3,6 +3,7 @@ import { type NestExpressApplication } from '@nestjs/platform-express';
 import { IsString, Length } from 'class-validator';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { Public } from '../src/common/auth/auth.decorators.js';
 import { PaginationQueryDto } from '../src/common/dto/pagination-query.dto.js';
 import { PaginatedResult } from '../src/common/utils/pagination.js';
 import { createTestApp } from './utils/create-test-app.js';
@@ -14,6 +15,7 @@ class EchoDto {
 }
 
 /** Test-only routes that exercise the global pipeline end to end. */
+@Public()
 @Controller('e2e-probe')
 class ProbeController {
   @Get('items')
@@ -32,7 +34,7 @@ describe('Platform (e2e)', () => {
   const http = () => request(app.getHttpServer());
 
   beforeAll(async () => {
-    app = await createTestApp([ProbeController]);
+    app = (await createTestApp({ controllers: [ProbeController] })).app;
   });
 
   afterAll(async () => {
