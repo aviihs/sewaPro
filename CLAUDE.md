@@ -2,11 +2,11 @@
 
 Before doing anything, read **`docs/HANDOFF.md`**. It has:
 
-- the current status (Step 6 search is pending PostGIS)
+- the current status (all twelve steps done)
 - the owner's standing rules
 - the daily commands
 - the gotchas learned so far
-- the step-by-step plan for the next job
+- a summary of the search module (Step 6)
 
 Then read `docs/DECISIONS.md` and the README as needed.
 

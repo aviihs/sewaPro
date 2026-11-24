@@ -27,6 +27,7 @@ export function buildOpenApiDocument(app: NestExpressApplication): OpenAPIObject
     .addTag('Addresses', 'Saved service addresses (customers)')
     .addTag('Catalog', 'Public service categories and services')
     .addTag('Admin: Catalog', 'Category and service management')
+    .addTag('Search', 'Public nearby provider search and provider profiles')
     .addTag('Providers: Me', 'Provider onboarding, offer, documents, schedule, dashboard')
     .addTag('Admin: Providers', 'Provider verification')
     .addTag('Bookings', 'Customer bookings')

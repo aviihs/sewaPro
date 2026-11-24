@@ -1,45 +1,38 @@
 # SewaPro: Session Handoff
 
 Read this first in a new session. Then read `README.md` (overview, modules) and
-`docs/DECISIONS.md` (every decision and why, D-001 to D-078).
+`docs/DECISIONS.md` (every decision and why, D-001 to D-085).
 
-Last updated: 2026-11-24.
+Last updated: 2026-11-24 (Step 6 finished).
 
 ## 1. Status
 
-| Step  | What                                                                  | State                                       |
-| ----- | --------------------------------------------------------------------- | ------------------------------------------- |
-| 1     | Scaffold, config, Prisma, lint, Swagger, common layer                 | ✅                                          |
-| 2     | Schema (23 models), migrations, constraints, seed                     | ✅                                          |
-| 3     | Auth (password + phone OTP, JWT + rotating refresh), users, addresses | ✅                                          |
-| 4     | Catalog: categories and services, admin CRUD                          | ✅                                          |
-| 5     | Providers, KYC documents, availability, admin verification            | ✅                                          |
-| **6** | **Nearby search (PostGIS)**                                           | **⏸ NOT STARTED: PostGIS is not installed** |
-| 7     | Bookings, state machine, history, events                              | ✅                                          |
-| 8     | Quotations and the expiry job                                         | ✅                                          |
-| 9     | Reviews and rating recompute                                          | ✅                                          |
-| 10    | Notifications, audit, disputes                                        | ✅                                          |
-| 11    | Admin dashboard, reports, users, bookings                             | ✅                                          |
-| 12    | Hardening, security and OpenAPI tests, full flow                      | ✅ (search leg waits for Step 6)            |
+| Step | What                                                                  | State |
+| ---- | --------------------------------------------------------------------- | ----- |
+| 1    | Scaffold, config, Prisma, lint, Swagger, common layer                 | ✅    |
+| 2    | Schema (23 models), migrations, constraints, seed                     | ✅    |
+| 3    | Auth (password + phone OTP, JWT + rotating refresh), users, addresses | ✅    |
+| 4    | Catalog: categories and services, admin CRUD                          | ✅    |
+| 5    | Providers, KYC documents, availability, admin verification            | ✅    |
+| 6    | Nearby search (PostGIS)                                               | ✅    |
+| 7    | Bookings, state machine, history, events                              | ✅    |
+| 8    | Quotations and the expiry job                                         | ✅    |
+| 9    | Reviews and rating recompute                                          | ✅    |
+| 10   | Notifications, audit, disputes                                        | ✅    |
+| 11   | Admin dashboard, reports, users, bookings                             | ✅    |
+| 12   | Hardening, security and OpenAPI tests, full flow                      | ✅    |
 
-Last green run: `bun run verify` passed with **573 unit tests**, `bun run test:e2e`
-passed with **93 e2e tests (14 files)**, and domain + application coverage was **97.5%**.
+Last green run: `bun run verify` passed with **588 unit tests**, `bun run test:e2e`
+passed with **115 e2e tests (15 files)**, and coverage was **97.6%** (lines).
 Nothing is committed to git. Only commit when the owner asks.
 
-**Next job: Step 6** (plan in section 6). First check that PostGIS is installed:
-
-```bash
-psql -d sewapro -tAc "select name from pg_available_extensions where name='postgis'"
-```
-
-Empty output means the owner still has to run `brew install postgis`. Disk space is low
-(often 1 to 4 GB free), so warn them before they install.
+**All twelve steps are done.** There is no planned next job; see section 7 for ideas.
 
 ## 2. Standing rules (from the owner, never break)
 
 - **Bun only** (`bun install`, `bun run`, `bunx`). Never npm, pnpm or yarn.
 - The app and tests run on **Node 24**: `source ~/.nvm/nvm.sh && nvm use`.
-- **No Docker.** PostgreSQL 16 runs on the host (Homebrew). Databases: `sewapro` (dev) and `sewapro_test` (e2e).
+- **No Docker.** PostgreSQL **18** + PostGIS 3.7 run on the host (Homebrew `postgresql@18`, `postgis`). Databases: `sewapro` (dev) and `sewapro_test` (e2e). PostgreSQL 16 is still installed but stopped; its data was dumped to `.tmp/sewapro-pg16.dump` and restored into 18.
 - Out of scope: **no payments, transactions, commission, payouts, chat, live tracking or AI**. No tables, modules or endpoints for them.
 - Clean Architecture per module: `domain → application → infrastructure → presentation`. Dependencies point inward. Prisma only in `infrastructure/`. ESLint enforces this.
 - One use-case class per action, with a single `execute()`. Controllers validate, call one use case and map to a DTO. Use cases depend on abstract-class ports.
@@ -114,47 +107,18 @@ Useful test helpers:
 9. Express `sendFile` refuses dot-directories (the test storage is `.tmp/…`). FilesController passes `dotfiles: 'allow'`.
 10. Swagger UI starts collapsed (`docExpansion: 'none'`, `defaultModelsExpandDepth: 0`, `filter: true`).
 11. The heredoc parser in the shell tool can misread `$`-heavy code. Write source files with the Write tool.
+12. **Generated columns and `prisma:diff`:** Prisma reads a `GENERATED ALWAYS AS` expression as a default. `providers.location` therefore carries `@default(dbgenerated("…"))` with the expression exactly as `pg_get_expr` prints it; otherwise every diff tries to `DROP DEFAULT`.
+13. `psql` on PATH is still the 16 client (`/opt/homebrew/bin/psql`). It talks to the 18 server fine; for `pg_dump`/`pg_restore` use `/opt/homebrew/opt/postgresql@18/bin/…`.
+14. Disk space is tight. Homebrew's PostGIS pulls in gdal, poppler, numpy and a Python (about 2 GB).
 
-## 6. Step 6 plan: Search (nearby providers)
+## 6. Search (Step 6) at a glance
 
-The brief requires: `GET /providers` with filters `categoryId`, `serviceId`, `lat`/`lng`, `radiusKm`, `minRating`,
-`minPrice`/`maxPrice`, `minExperience`, `verifiedOnly`, `availableOn`, `q`, `sortBy` (`distance`, `rating`
-or `price`), `page` and `limit`. Use a parameterized `$queryRaw` with `ST_DWithin`/`ST_Distance` and a
-**GiST** index. Return `distanceKm`. Return only VERIFIED and available providers. No N+1, and
-select only the columns you need. Also add `GET /providers/:id`, a public detail with no phone or email.
-
-Steps:
-
-1. **Migration** `…_provider_location`:
-   ```sql
-   CREATE EXTENSION IF NOT EXISTS postgis;
-   ALTER TABLE providers ADD COLUMN location geography(Point, 4326)
-     GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography) STORED;
-   CREATE INDEX providers_location_gist ON providers USING gist (location);
-   ```
-   Add `location Unsupported("geography(Point, 4326)")?` and the GiST `@@index` to `schema.prisma` so
-   `prisma:diff` stays empty. Check that, then apply to both databases and regenerate the client.
-2. **`src/modules/search`**:
-   - domain: `ProviderSearchFilter`, `ProviderSearchHit` (id, name, rating, count, experience, minPrice, distanceKm, services), `PublicProviderProfile`, `ProviderSearchReader` port, errors.
-   - application: `SearchProvidersUseCase`. Validate that lat and lng are given together, radius is 1 to 50 km (default 10), minPrice ≤ maxPrice, and `availableOn` is a date that is not in the past. Sorting by distance needs lat/lng. Also `GetPublicProviderUseCase`.
-   - infrastructure: `PrismaProviderSearchReader`. Build the query with `Prisma.sql` fragments:
-     - Base filter: `p.verification_status = 'VERIFIED' AND p.is_available AND p.deleted_at IS NULL`, the owner's account is not SUSPENDED, `ST_DWithin(p.location, point, radius_m)`, and the customer is inside the provider's own `service_radius_km`.
-     - Price filters use `provider_services` joined to active `services` and `categories`.
-     - `availableOn` uses `availability_rules.day_of_week` (Nepal weekday) and `NOT EXISTS blocked_dates`.
-     - `q` matches `business_name ILIKE` (trigram index exists) or the service name.
-     - Run a separate `COUNT(*)` for pagination meta, and ORDER BY with a stable tiebreak on `id`.
-   - presentation: `SearchController` (`@Public()`), query DTO (`@Type(() => Number)` and so on), response DTOs, and `@ApiPaginatedResponse`.
-   - Route clash: the `providers/me` controllers are registered earlier, and `:id` uses `ParseUUIDPipe`. Make sure `GET /providers/me` still works for providers.
-3. **Tests**:
-   - Unit tests for the use cases.
-   - E2E: distance ordering and `distanceKm`, every filter, pending/suspended/unavailable providers hidden, no contact data in the detail, 400 for bad combinations.
-   - Add the search step to `test/full-flow.e2e-spec.ts`.
-   - The IDOR matrix and the OpenAPI contract test must still pass.
-4. **Docs**:
-   - DECISIONS: add D-079 onwards, and update D-053 and D-078.
-   - README: status line, modules table (`search` row), roadmap item 6.
-   - This file: section 1.
-   - CI already uses the `postgis/postgis:16-3.4` image.
+- `src/modules/search`: `GET /providers` (public, filters, pagination) and `GET /providers/:id` (public profile, no contact data). Decisions D-079 to D-085.
+- SQL lives in `search/infrastructure/provider-search.sql.ts` (`Prisma.sql` fragments, all values bound). One page query with `json_agg` offerings plus one `COUNT(DISTINCT)` query.
+- `providers.location` is a generated `geography(Point, 4326)` with GiST index `providers_location_gist` (migration `20261124000500_provider_location`).
+- `SearchModule` must stay after `ProvidersModule` in `AppModule` so `/providers/me…` wins over `/providers/:id`.
+- Tests: `src/modules/search/application/search.use-cases.spec.ts`, `test/search.e2e-spec.ts`, and the search leg in `test/full-flow.e2e-spec.ts`.
+- CI uses `postgis/postgis:18-3.6`.
 
 ## 7. Known limitations / later ideas
 

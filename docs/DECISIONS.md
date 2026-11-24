@@ -108,7 +108,7 @@ New migrations are created without a shadow database: change `schema.prisma`, ru
 
 ### D-025 PostGIS optional until Step 6
 
-The constraints migration creates `postgis` only if `pg_available_extensions` lists it, otherwise it emits a NOTICE. Migrations therefore run on a plain PostgreSQL 16 now; the Step 6 migration that adds the geography column will require it.
+The constraints migration creates `postgis` only if `pg_available_extensions` lists it, otherwise it emits a NOTICE. Migrations therefore ran on a plain PostgreSQL 16 until Step 6; the Step 6 migration (D-079) requires it.
 
 ### D-026 Idempotency keys scoped per customer
 
@@ -224,11 +224,41 @@ Weekly windows are minutes since local midnight in Nepal Standard Time (UTC+05:4
 
 `/providers/me/earnings-summary` reports completed job counts and the sum of `final_amount` for all time and the current Nepal calendar month. There is no commission, payout or balance: those belong to a future payments module (see "Out of scope").
 
-## Step 6: Search (deferred)
+## Step 6: Search
 
 ### D-053 Step 6 deferred until PostGIS is installed; Steps 7–11 done first
 
 The local PostgreSQL 16 has no PostGIS (`pg_available_extensions` lists `btree_gist`, `pg_trgm`, `citext`, but not `postgis`), and the brief requires `ST_DWithin`/`ST_Distance` with a GiST index. Instead of stopping the whole build, Steps 7–11 (which do not depend on search) were completed first. Search and the search leg of the Step 12 flow resume after `brew install postgis`. Nothing else depends on Step 6: bookings check the service radius with a pure haversine function (`common/geo/distance.ts`).
+
+**Update (Step 6 done):** the Homebrew `postgis` bottle is built only for PostgreSQL 18 and 19, so local development moved from PostgreSQL 16 to **18** (dev data was dumped from 16 and restored into 18). CI now uses `postgis/postgis:18-3.6`. See D-079 to D-085.
+
+### D-079 `providers.location`: a generated geography column with a GiST index
+
+Migration `20261124000500_provider_location` creates PostGIS unconditionally and adds `location geography(Point, 4326) GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography) STORED`, plus `providers_location_gist` (GiST). Because Postgres derives it, it can never drift from `latitude`/`longitude`, and no application code writes it. `schema.prisma` declares it as `Unsupported("geography(Point, 4326)")?` with the GiST `@@index`, so `prisma:diff` stays empty. Geography (not geometry) gives distances in metres on the spheroid with no projection maths.
+
+### D-080 One parameterised raw query, one count query
+
+`GET /providers` is built from `Prisma.sql` fragments (`search/infrastructure/provider-search.sql.ts`): every value is a bind parameter, and only fixed SQL (the ORDER BY for an enum `sortBy`) is chosen in code. The page query joins providers → users → live offerings (active `provider_services`, active and undeleted service and category), groups by provider and aggregates the matching offerings with `json_agg`, so a page is **one query** with no follow-ups (no N+1). It selects only the listed columns. A second `COUNT(DISTINCT p.id)` query over the same FROM/WHERE (without the JSON) gives the pagination total; both run in parallel. `GET /providers/:id` is a single Prisma `select` with nested selects.
+
+### D-081 Who is listed
+
+Only providers with `verification_status = 'VERIFIED'`, `is_available`, not soft-deleted, whose account is not `SUSPENDED` or deleted, and who have **at least one live offering matching the filters** (a provider with nothing bookable is not useful in search). `verifiedOnly` is accepted for compatibility with the brief, but search never lists unverified providers, so `false` changes nothing.
+
+### D-082 Location, radius and the provider's own travel radius
+
+`lat` and `lng` are optional but must come together (`INVALID_SEARCH_QUERY`, reason `LOCATION_INCOMPLETE`) and lie in Nepal's bounding box. `radiusKm` is 1 to 50 (default 10) and needs a location. With a location, two `ST_DWithin` predicates apply: the search radius (uses the GiST index) and the provider's `service_radius_km` (so customers only see providers who would travel to them, matching the booking-time service-area rule, D-056). `distanceKm` is `ST_Distance` rounded to 10 m; it is `null` without a location.
+
+### D-083 Filter semantics
+
+All filters combine with AND. `serviceId`, `categoryId`, `minPrice`/`maxPrice` and `q` apply **per offering**: a provider is listed if at least one offering passes them all, and `services`/`minPrice` in a hit describe only those matching offerings. Price filters therefore exclude quotation-only offerings (their price is null). `q` is an `ILIKE` substring of the business name or the service name, with `%`, `_` and `\` escaped; the business name has a trigram index (D-075). `minRating` (0 to 5) and `minExperience` apply to the provider. `availableOn` (Nepal date, today up to 365 days ahead) needs a weekly window on that weekday and no blocked date on it; it does not check per-slot capacity, which booking creation still enforces. Bad combinations (inverted price range, `sortBy=distance` without a location, out-of-range `availableOn`) are 400 `INVALID_SEARCH_QUERY` with a `reason`; malformed values are 400 `VALIDATION_FAILED`.
+
+### D-084 Sorting and stable pages
+
+`sortBy` defaults to `distance` with a location and `rating` without one. `distance`: nearest, then rating. `rating`: average, then count. `price`: lowest matching price, quotation-only last (`NULLS LAST`), then rating. Every order ends with `id`, so offset pages never repeat or skip rows when values tie.
+
+### D-085 Public provider profile and route order
+
+`GET /providers/:id` returns the display name (business name, else full name), bio, experience, rating, completed jobs, travel radius, availability flag, verified/member dates, live offerings with category, portfolio (public URLs) and weekly hours. It never returns phone, email, user id, coordinates or documents. Only verified providers with a non-suspended account are visible; others are 404 (unavailable providers are still visible, with `isAvailable: false`). `SearchModule` is imported after `ProvidersModule` so the static `providers/me…` routes are registered before `providers/:id`; `:id` also uses `ParseUUIDPipe`.
 
 ## Step 7: Bookings
 
@@ -340,11 +370,12 @@ Indexes were checked against every list filter and sort and the missing ones add
 
 ### D-077 End-to-end journey
 
-`test/full-flow.e2e-spec.ts` uses only public HTTP: admin creates the catalog → customer registers → provider registers, uploads a document and portfolio image, offers a quotation-priced service, sets hours → admin verifies → customer books (Idempotency-Key) → provider quotes → customer accepts (booking confirmed) → on the way → in progress → complete → review → both parties' notifications, provider dashboard/earnings, admin dashboard and audit trail. Provider discovery uses the catalog and provider id until Step 6 adds search to this flow.
+`test/full-flow.e2e-spec.ts` uses only public HTTP: admin creates the catalog → customer registers → provider registers, uploads a document and portfolio image, offers a quotation-priced service, sets hours → admin verifies → customer books (Idempotency-Key) → provider quotes → customer accepts (booking confirmed) → on the way → in progress → complete → review → both parties' notifications, provider dashboard/earnings, admin dashboard and audit trail. The customer finds the provider through the catalog and nearby search, then opens the public profile.
 
 ### D-078 Known limitations
 
-- Search (Step 6) is pending PostGIS.
+- Search pagination is offset-based; very deep pages get slower (fine at marketplace scale; switch to keyset on `(distance, id)` if needed).
+- `availableOn` checks working days and blocked dates, not remaining slots on that day.
 - `booking_images` exists but has no upload endpoint.
 - Throttling, the cache and event delivery are in-process; several API instances need Redis-backed throttler storage and cache, and an outbox or broker for events.
 - Event-sourced audit rows have no IP/user agent (D-069).

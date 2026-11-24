@@ -2,15 +2,15 @@
 
 Backend for **SewaPro**, a local home-service marketplace for Nepal (Kathmandu first). Customers find and book verified providers (electricians, plumbers, carpenters, AC technicians, cleaners, mechanics); providers manage their offer, schedule and jobs; admins verify providers and run the platform.
 
-NestJS 12 (ESM) · TypeScript 6 (strict) · PostgreSQL 16 + Prisma 7 · Vitest + Supertest · Bun (package manager) · Node 24 (runtime)
+NestJS 12 (ESM) · TypeScript 6 (strict) · PostgreSQL 18 + PostGIS + Prisma 7 · Vitest + Supertest · Bun (package manager) · Node 24 (runtime)
 
-> **Status:** Steps 1–5 and 7–12 are complete. **Step 6 (nearby search) is waiting for PostGIS**: run `brew install postgis`, then search (`GET /providers`, `GET /providers/:id`) and the search leg of the end-to-end flow are added. Everything else, including bookings, quotations, reviews, notifications, disputes and the admin APIs, is built and tested.
+> **Status:** Steps 1–12 are complete, including nearby provider search with PostGIS (`GET /providers`, `GET /providers/:id`).
 
 ## Requirements
 
 - Node.js **24** (`nvm use` reads `.nvmrc`)
 - **Bun** 1.3+ (the only package manager; never npm, pnpm or yarn)
-- PostgreSQL **16+** with the `btree_gist` and `pg_trgm` contrib extensions (bundled with Homebrew/Postgres.app). **PostGIS** is needed for search: `brew install postgis`
+- PostgreSQL **18** with **PostGIS** and the `btree_gist` and `pg_trgm` contrib extensions: `brew install postgresql@18 postgis` (the Homebrew PostGIS bottle does not support PostgreSQL 16)
 - No Docker is required for development.
 
 ## Setup
@@ -96,21 +96,21 @@ src/
 
 ## Modules
 
-| Module          | Responsibility                                                                                                                                                           | Main routes                                                                                                        |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `auth`          | Registration; email + password and phone + OTP login; JWT access + rotating refresh tokens with reuse detection; global auth and role guards                             | `/auth/register`, `/auth/login`, `/auth/send-otp`, `/auth/verify-otp`, `/auth/refresh`, `/auth/logout`, `/auth/me` |
-| `users`         | Own profile                                                                                                                                                              | `GET/PATCH /users/me`                                                                                              |
-| `addresses`     | Customer addresses (max 10, one default)                                                                                                                                 | `/addresses` CRUD                                                                                                  |
-| `catalog`       | Categories and services; cached public catalog; admin CRUD with soft delete or deactivation                                                                              | `GET /categories`, `GET /services`, `/admin/categories`, `/admin/services`                                         |
-| `providers`     | Provider registration, profile, offerings and pricing, portfolio, private KYC documents, weekly availability, blocked dates, settings, dashboard, earnings; verification | `POST /providers/register`, `/providers/me/*`, `/admin/providers/*`                                                |
-| `bookings`      | Booking creation (availability, daily cap, service area, idempotency, no double booking), state machine, history, events, privacy                                        | `/bookings`, `/providers/me/bookings/*`                                                                            |
-| `quotations`    | Provider quotations with server-computed totals, customer accept/decline, expiry job                                                                                     | `/providers/me/bookings/:id/quotations`, `/providers/me/quotations/:id/send`, `/bookings/:id/quotations/*`         |
-| `reviews`       | One review per completed booking, transactional rating recompute, public listing, moderation                                                                             | `POST /bookings/:id/review`, `GET /providers/:id/reviews`, `/admin/reviews`                                        |
-| `notifications` | Event-driven in-app notifications, push port, cursor pagination                                                                                                          | `/notifications`, `/notifications/unread-count`, `/notifications/:id/read`, `/notifications/read-all`              |
-| `disputes`      | Raise on eligible bookings; admin review and resolution that sets the booking's final status                                                                             | `/disputes`, `/admin/disputes/*`                                                                                   |
-| `audit`         | Audit rows from admin actions (in-transaction) and sensitive events (listeners); read-only API                                                                           | `GET /admin/audit-logs`                                                                                            |
-| `admin`         | Dashboard, booking and growth reports (Nepal time), user suspension, booking monitoring                                                                                  | `/admin/dashboard`, `/admin/reports/*`, `/admin/users/*`, `/admin/bookings/*`                                      |
-| `search`        | **Step 6, pending PostGIS**: nearby providers with filters and distance                                                                                                  | `GET /providers`, `GET /providers/:id`                                                                             |
+| Module          | Responsibility                                                                                                                                                                                           | Main routes                                                                                                        |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `auth`          | Registration; email + password and phone + OTP login; JWT access + rotating refresh tokens with reuse detection; global auth and role guards                                                             | `/auth/register`, `/auth/login`, `/auth/send-otp`, `/auth/verify-otp`, `/auth/refresh`, `/auth/logout`, `/auth/me` |
+| `users`         | Own profile                                                                                                                                                                                              | `GET/PATCH /users/me`                                                                                              |
+| `addresses`     | Customer addresses (max 10, one default)                                                                                                                                                                 | `/addresses` CRUD                                                                                                  |
+| `catalog`       | Categories and services; cached public catalog; admin CRUD with soft delete or deactivation                                                                                                              | `GET /categories`, `GET /services`, `/admin/categories`, `/admin/services`                                         |
+| `providers`     | Provider registration, profile, offerings and pricing, portfolio, private KYC documents, weekly availability, blocked dates, settings, dashboard, earnings; verification                                 | `POST /providers/register`, `/providers/me/*`, `/admin/providers/*`                                                |
+| `bookings`      | Booking creation (availability, daily cap, service area, idempotency, no double booking), state machine, history, events, privacy                                                                        | `/bookings`, `/providers/me/bookings/*`                                                                            |
+| `quotations`    | Provider quotations with server-computed totals, customer accept/decline, expiry job                                                                                                                     | `/providers/me/bookings/:id/quotations`, `/providers/me/quotations/:id/send`, `/bookings/:id/quotations/*`         |
+| `reviews`       | One review per completed booking, transactional rating recompute, public listing, moderation                                                                                                             | `POST /bookings/:id/review`, `GET /providers/:id/reviews`, `/admin/reviews`                                        |
+| `notifications` | Event-driven in-app notifications, push port, cursor pagination                                                                                                                                          | `/notifications`, `/notifications/unread-count`, `/notifications/:id/read`, `/notifications/read-all`              |
+| `disputes`      | Raise on eligible bookings; admin review and resolution that sets the booking's final status                                                                                                             | `/disputes`, `/admin/disputes/*`                                                                                   |
+| `audit`         | Audit rows from admin actions (in-transaction) and sensitive events (listeners); read-only API                                                                                                           | `GET /admin/audit-logs`                                                                                            |
+| `admin`         | Dashboard, booking and growth reports (Nepal time), user suspension, booking monitoring                                                                                                                  | `/admin/dashboard`, `/admin/reports/*`, `/admin/users/*`, `/admin/bookings/*`                                      |
+| `search`        | Public nearby search of verified, available providers (PostGIS `ST_DWithin`/`ST_Distance`, GiST index) with service, category, rating, price, experience, date and text filters; public provider profile | `GET /providers`, `GET /providers/:id`                                                                             |
 
 ## Conventions
 
@@ -163,10 +163,10 @@ No existing module needs to change except for wiring the new module into `AppMod
 3. ✅ Auth, Users, Addresses
 4. ✅ Categories, Services, admin CRUD
 5. ✅ Providers, documents, availability, admin verification
-6. ⏸ Search (PostGIS), waiting for `brew install postgis`
+6. ✅ Search (PostGIS)
 7. ✅ Bookings, state machine, history, events
 8. ✅ Quotations
 9. ✅ Reviews and rating recompute
 10. ✅ Notifications, audit, disputes
 11. ✅ Admin dashboard, reports, moderation
-12. ✅ Hardening, full e2e, docs (search leg pending Step 6)
+12. ✅ Hardening, full e2e, docs
