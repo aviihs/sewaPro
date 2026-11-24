@@ -7,8 +7,8 @@ import { type TestContext, createTestApp } from './utils/create-test-app.js';
 import { resetDatabase } from './utils/database.js';
 
 /**
- * The whole marketplace journey through public HTTP only. Provider discovery
- * uses the catalog and the provider id until Step 6 (PostGIS search) lands.
+ * The whole marketplace journey through public HTTP only. The customer finds the
+ * provider through the catalog and nearby search, then opens the public profile.
  */
 describe('Full flow (e2e): onboarding → verification → booking → quotation → job → review → notifications', () => {
   let ctx: TestContext;
@@ -107,6 +107,17 @@ describe('Full flow (e2e): onboarding → verification → booking → quotation
 
     const catalog = await http().get(api('/categories')).expect(200);
     expect(catalog.body.data[0].services[0].id).toBe(serviceId);
+    const nearby = await http()
+      .get(api(`/providers?serviceId=${serviceId}&lat=27.7215&lng=85.3301&radiusKm=5`))
+      .expect(200);
+    expect(nearby.body.data).toHaveLength(1);
+    expect(nearby.body.data[0]).toMatchObject({ id: providerId, displayName: 'Thapa Electricals' });
+    expect(nearby.body.data[0].distanceKm).toBeGreaterThan(0);
+    const profile = await http()
+      .get(api(`/providers/${providerId}`))
+      .expect(200);
+    expect(profile.body.data.portfolio).toHaveLength(1);
+    expect(JSON.stringify(profile.body)).not.toContain('ram@flow.test');
     await http()
       .get(api(`/providers/${providerId}/reviews`))
       .expect(200);
