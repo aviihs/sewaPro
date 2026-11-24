@@ -56,6 +56,12 @@ export function setupSwagger(app: NestExpressApplication): void {
   SwaggerModule.setup(DOCS_PATH, app, () => buildOpenApiDocument(app), {
     jsonDocumentUrl: DOCS_JSON_PATH,
     useGlobalPrefix: false,
-    swaggerOptions: { persistAuthorization: true },
+    swaggerOptions: {
+      persistAuthorization: true,
+      // Start with every tag and every schema (DTO) collapsed.
+      docExpansion: 'none',
+      defaultModelsExpandDepth: 0,
+      filter: true,
+    },
   });
 }
