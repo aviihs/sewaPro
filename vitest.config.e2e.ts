@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
-/** E2E tests against a real Postgres (`.env.test`). Run via `pnpm test:e2e`. */
+/** E2E tests against a real Postgres (`.env.test`). Run via `bun run test:e2e`. */
 export default defineConfig({
   test: {
     root: './',

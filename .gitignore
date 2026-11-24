@@ -17,7 +17,7 @@ build/
 .nest/
 
 # ─── Prisma ──────────────────────────────────────────────────
-# Generated client is rebuilt by `pnpm prisma:generate`
+# Generated client is rebuilt by `bun run prisma:generate`
 src/infrastructure/prisma/generated/
 # Migrations (prisma/migrations/) ARE committed
 

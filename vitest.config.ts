@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
-/** Unit tests (no database). Run via `pnpm test` / `pnpm test:cov`. */
+/** Unit tests (no database). Run via `bun run test` / `bun run test:cov`. */
 export default defineConfig({
   test: {
     root: './',
