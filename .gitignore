@@ -1,0 +1,87 @@
+# ─── Dependencies ────────────────────────────────────────────
+node_modules/
+
+# Only Bun is used in this project (bun.lock IS committed): never commit other lockfiles
+package-lock.json
+npm-shrinkwrap.json
+yarn.lock
+pnpm-lock.yaml
+pnpm-workspace.yaml
+.pnpm-store/
+.pnpm-debug.log*
+
+# ─── Build output ────────────────────────────────────────────
+dist/
+build/
+*.tsbuildinfo
+.nest/
+
+# ─── Prisma ──────────────────────────────────────────────────
+# Generated client is rebuilt by `pnpm prisma:generate`
+src/infrastructure/prisma/generated/
+# Migrations (prisma/migrations/) ARE committed
+
+# ─── Environment & secrets ───────────────────────────────────
+.env
+.env.*
+!.env.example
+# Test env holds no secrets (local DB only) and is needed by CI
+!.env.test
+*.pem
+*.key
+*.p12
+*.crt
+secrets/
+credentials*.json
+service-account*.json
+
+# ─── Local file uploads / storage (dev adapter) ──────────────
+uploads/
+storage/
+tmp/
+.tmp/
+
+# ─── Tests & coverage ────────────────────────────────────────
+coverage/
+.nyc_output/
+junit.xml
+test-results/
+reports/
+
+# ─── Logs ────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# ─── Caches ──────────────────────────────────────────────────
+.cache/
+.eslintcache
+.prettiercache
+.jest-cache/
+.turbo/
+
+# ─── OS files ────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ─── Editors / IDEs ──────────────────────────────────────────
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# ─── Claude Code local settings ──────────────────────────────
+.claude/settings.local.json

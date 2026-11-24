@@ -1,0 +1,13 @@
+// SewaPro database schema. Domain models are added in Step 2.
+// Connection URL lives in prisma.config.ts (Prisma 7).
+
+generator client {
+  provider         = "prisma-client"
+  output           = "../src/infrastructure/prisma/generated"
+  moduleFormat     = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
