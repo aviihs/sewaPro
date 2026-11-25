@@ -1,29 +1,29 @@
 # SewaPro: Session Handoff
 
 Read this first in a new session. Then read `README.md` (overview, modules) and
-`docs/DECISIONS.md` (every decision and why, D-001 to D-085).
+`docs/DECISIONS.md` (every decision and why, D-001 to D-089).
 
-Last updated: 2026-11-24 (Step 6 finished).
+Last updated: 2026-11-25 (auth v2: email verification, D-088 and D-089).
 
 ## 1. Status
 
-| Step | What                                                                  | State |
-| ---- | --------------------------------------------------------------------- | ----- |
-| 1    | Scaffold, config, Prisma, lint, Swagger, common layer                 | ✅    |
-| 2    | Schema (23 models), migrations, constraints, seed                     | ✅    |
-| 3    | Auth (password + phone OTP, JWT + rotating refresh), users, addresses | ✅    |
-| 4    | Catalog: categories and services, admin CRUD                          | ✅    |
-| 5    | Providers, KYC documents, availability, admin verification            | ✅    |
-| 6    | Nearby search (PostGIS)                                               | ✅    |
-| 7    | Bookings, state machine, history, events                              | ✅    |
-| 8    | Quotations and the expiry job                                         | ✅    |
-| 9    | Reviews and rating recompute                                          | ✅    |
-| 10   | Notifications, audit, disputes                                        | ✅    |
-| 11   | Admin dashboard, reports, users, bookings                             | ✅    |
-| 12   | Hardening, security and OpenAPI tests, full flow                      | ✅    |
+| Step | What                                                                           | State |
+| ---- | ------------------------------------------------------------------------------ | ----- |
+| 1    | Scaffold, config, Prisma, lint, Swagger, common layer                          | ✅    |
+| 2    | Schema (23 models), migrations, constraints, seed                              | ✅    |
+| 3    | Auth (password + email verification, JWT + rotating refresh), users, addresses | ✅    |
+| 4    | Catalog: categories and services, admin CRUD                                   | ✅    |
+| 5    | Providers, KYC documents, availability, admin verification                     | ✅    |
+| 6    | Nearby search (PostGIS)                                                        | ✅    |
+| 7    | Bookings, state machine, history, events                                       | ✅    |
+| 8    | Quotations and the expiry job                                                  | ✅    |
+| 9    | Reviews and rating recompute                                                   | ✅    |
+| 10   | Notifications, audit, disputes                                                 | ✅    |
+| 11   | Admin dashboard, reports, users, bookings                                      | ✅    |
+| 12   | Hardening, security and OpenAPI tests, full flow                               | ✅    |
 
-Last green run: `bun run verify` passed with **588 unit tests**, `bun run test:e2e`
-passed with **115 e2e tests (15 files)**, and coverage was **97.6%** (lines).
+Last green run: `bun run verify` passed with **598 unit tests**, `bun run test:e2e`
+passed with **118 e2e tests (15 files)**, and `bun run qa:all` passed with 10,470 assertions over 101 operations.
 Nothing is committed to git. Only commit when the owner asks.
 
 **All twelve steps are done.** There is no planned next job; see section 7 for ideas.
@@ -62,7 +62,7 @@ bun run qa:all                         # Postman/Newman suite on :3100 against s
 ```
 
 - Seed admin credentials: `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` in `.env` (git-ignored).
-- In dev, OTP codes appear in the server log.
+- In dev, email codes (verification, password reset) appear in the server log. Real email: `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `EMAIL_FROM` (D-089; the owner will set these later).
 - `/api/v1` itself returns 404 on purpose (there is no root route). Use `/docs`.
 
 ## 4. Where things are
@@ -83,7 +83,7 @@ test/             *.e2e-spec.ts, utils/, unit/ (mock helpers and fixtures for un
 
 Useful test helpers:
 
-- `test/utils/create-test-app.ts`: `createTestApp({ controllers?, sensitiveThrottleLimit? })`. SMS is captured in memory, and `ctx.sms.lastCodeFor(phone)` returns the last OTP.
+- `test/utils/create-test-app.ts`: `createTestApp({ controllers?, sensitiveThrottleLimit? })`. SMS and email are captured in memory; `ctx.email.lastCodeFor(email, /Verify|Reset/)` returns the last emailed code. `verifyEmail(ctx, email)` in `test/utils/auth.ts` confirms it and returns the session.
 - `test/utils/auth.ts`: `createUser(ctx, role)` and `nextPhone()`.
 - `test/utils/providers.ts`: `registerProvider`, `verifiedProvider` (offers a service, works Sun to Fri 06:00 to 20:00) and `createService`.
 - `test/utils/bookings.ts`: `nepalSlot(daysAhead, hour)` (skips Saturdays), `createAddress`, `book` and `providerAction`.
@@ -131,6 +131,7 @@ Useful test helpers:
 - `booking_images` table exists but has no upload endpoint (D-060).
 - Throttler, cache and events are in-process. Running more than one instance needs Redis plus an outbox.
 - Audit rows created from events have no IP address (D-069).
-- Messaging uses console adapters (no real SMS, email or push).
+- Messaging uses console adapters for SMS and push; email has a Resend adapter (off until the env is set).
+- **Auth v2 (D-088):** registration emails a code and gives no session until `POST /auth/verify-email`. Phone-OTP login was removed; phone is stored unverified and phone verification is planned later. Social login and account deletion (Taskify has them) are not done yet.
 - The repo has lint-staged config in both `package.json` and `.lintstagedrc.json` (pre-existing; the owner was not asked about it).
 - Payments are intentionally absent; README section "Adding Payments later" explains the extension points.

@@ -392,6 +392,32 @@ Indexes were checked against every list filter and sort and the missing ones add
 
 Things a black-box test cannot do (read a development OTP, wait for expiry, sign an expired token) go through `qa/scripts/control-server.ts`, test tooling bound to 127.0.0.1 that refuses any database not named `*_test`. It shifts timestamps relative to values the API wrote, so the tests hold even under BUG-001. Defects found are recorded in `qa/BUGS.md` and marked in the collection: while a bug reproduces, its assertion is reported as skipped with its id; when it stops reproducing, the assertion fails and asks for the marker to be removed. Application code was not changed by the QA work.
 
+## Auth v2: email verification (Taskify-style)
+
+### D-088 Email verification replaces phone-OTP login
+
+The owner asked for the Taskify flow: email first, phone later.
+
+- `POST /auth/register` and `POST /providers/register` create the account but issue **no session**. They return `{ user, verification: { expiresInSeconds, resendAfterSeconds } }` and email a 6-digit code.
+- `POST /auth/verify-email` `{ email, code }` marks the email verified and signs the user in (same response as login).
+- `POST /auth/login` answers `403 EMAIL_NOT_VERIFIED` for an unverified email, only after a correct password (like suspension), so it does not help enumeration.
+- `POST /auth/resend-verification` and `POST /auth/forgot-password` always answer `200` with the same body: nothing is sent for unknown, verified (resend), password-less or suspended accounts, and sends inside the cooldown are dropped silently.
+- `POST /auth/reset-password` `{ email, code, newPassword }` → `204`. It revokes every refresh token, and it also verifies an unverified email (the code proves the address).
+- `POST /auth/change-password` (signed in) checks the current password (`422 CURRENT_PASSWORD_INCORRECT`), revokes every session and returns a new one.
+- Changing the email in `PATCH /users/me` makes it unverified again (`emailVerified: false`); confirm with resend-verification + verify-email.
+- Codes reuse the `otp_codes` table, now keyed by `recipient` (email) with purposes `EMAIL_VERIFICATION` and `PASSWORD_RESET`: HMAC-hashed, **10-minute** expiry, 5 attempts, 60 s cooldown, 3 per 15 minutes per address and purpose; a new code burns older ones.
+- Phone: still required and unique at registration, stored **unverified**. `send-otp` / `verify-otp` were removed; phone verification will come back later as a new purpose on the same table. Migration `20261125000100_email_verification` deletes outstanding codes and marks every existing account that has an email as verified, so nobody is locked out. Accounts created by the old phone-OTP login have no email or password and cannot sign in until phone sign-in returns (dev data only).
+- Not taken from Taskify: social login (needs a Firebase project) and account deletion (bookings and disputes reference users). Both can be added later.
+
+### D-089 Email delivery
+
+`EmailSender` has two adapters, chosen by `EMAIL_PROVIDER`:
+
+- `console` (default): logs the masked recipient, subject and, outside production, the body (so codes can be used locally).
+- `resend`: Resend's HTTP API through `fetch` (no SDK). It needs `RESEND_API_KEY` and `EMAIL_FROM`.
+
+Env validation refuses `console` in production. A failed send is logged and not thrown: the account or reset request is already saved, and the user can ask for a new code.
+
 ## Out of scope (intentionally absent)
 
 Payments, transactions, eSewa/Khalti, commission, payouts, chat, live tracking, AI recommendations, subscriptions. No tables, enums, modules or endpoints exist for them. Bookings will emit domain events (Step 7) so a future `payments` module can subscribe without modifying existing modules.

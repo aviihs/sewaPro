@@ -30,7 +30,7 @@ bun run start:dev
 - API base: `http://localhost:3000/api/v1`
 - Swagger UI: `http://localhost:3000/docs` · OpenAPI JSON: `/docs-json`
 - Health: `GET /api/v1/health/live`, `GET /api/v1/health/ready`
-- Local OTPs are printed in the log by the development SMS adapter (never in production).
+- Local email codes (verification, password reset) are printed in the log by the development email adapter (never in production). Set `EMAIL_PROVIDER=resend` with `RESEND_API_KEY` and `EMAIL_FROM` for real delivery.
 
 ## Scripts
 
@@ -62,7 +62,7 @@ flowchart LR
     A --> D["domain<br/>entities · rules · errors · events · repository ports"]
     I -. implements .-> D
   end
-  A --> C["common<br/>ports: UnitOfWork · Clock · Cache · AuditTrail · FileStorage<br/>DomainEventPublisher · SmsSender · PushSender"]
+  A --> C["common<br/>ports: UnitOfWork · Clock · Cache · AuditTrail · FileStorage<br/>DomainEventPublisher · SmsSender · EmailSender · PushSender"]
   I --> X["src/infrastructure<br/>Prisma · transaction host · storage · events · logger"]
   X -. implements .-> C
 ```
@@ -96,21 +96,21 @@ src/
 
 ## Modules
 
-| Module          | Responsibility                                                                                                                                                                                           | Main routes                                                                                                        |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `auth`          | Registration; email + password and phone + OTP login; JWT access + rotating refresh tokens with reuse detection; global auth and role guards                                                             | `/auth/register`, `/auth/login`, `/auth/send-otp`, `/auth/verify-otp`, `/auth/refresh`, `/auth/logout`, `/auth/me` |
-| `users`         | Own profile                                                                                                                                                                                              | `GET/PATCH /users/me`                                                                                              |
-| `addresses`     | Customer addresses (max 10, one default)                                                                                                                                                                 | `/addresses` CRUD                                                                                                  |
-| `catalog`       | Categories and services; cached public catalog; admin CRUD with soft delete or deactivation                                                                                                              | `GET /categories`, `GET /services`, `/admin/categories`, `/admin/services`                                         |
-| `providers`     | Provider registration, profile, offerings and pricing, portfolio, private KYC documents, weekly availability, blocked dates, settings, dashboard, earnings; verification                                 | `POST /providers/register`, `/providers/me/*`, `/admin/providers/*`                                                |
-| `bookings`      | Booking creation (availability, daily cap, service area, idempotency, no double booking), state machine, history, events, privacy                                                                        | `/bookings`, `/providers/me/bookings/*`                                                                            |
-| `quotations`    | Provider quotations with server-computed totals, customer accept/decline, expiry job                                                                                                                     | `/providers/me/bookings/:id/quotations`, `/providers/me/quotations/:id/send`, `/bookings/:id/quotations/*`         |
-| `reviews`       | One review per completed booking, transactional rating recompute, public listing, moderation                                                                                                             | `POST /bookings/:id/review`, `GET /providers/:id/reviews`, `/admin/reviews`                                        |
-| `notifications` | Event-driven in-app notifications, push port, cursor pagination                                                                                                                                          | `/notifications`, `/notifications/unread-count`, `/notifications/:id/read`, `/notifications/read-all`              |
-| `disputes`      | Raise on eligible bookings; admin review and resolution that sets the booking's final status                                                                                                             | `/disputes`, `/admin/disputes/*`                                                                                   |
-| `audit`         | Audit rows from admin actions (in-transaction) and sensitive events (listeners); read-only API                                                                                                           | `GET /admin/audit-logs`                                                                                            |
-| `admin`         | Dashboard, booking and growth reports (Nepal time), user suspension, booking monitoring                                                                                                                  | `/admin/dashboard`, `/admin/reports/*`, `/admin/users/*`, `/admin/bookings/*`                                      |
-| `search`        | Public nearby search of verified, available providers (PostGIS `ST_DWithin`/`ST_Distance`, GiST index) with service, category, rating, price, experience, date and text filters; public provider profile | `GET /providers`, `GET /providers/:id`                                                                             |
+| Module          | Responsibility                                                                                                                                                                                            | Main routes                                                                                                        |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `auth`          | Registration with email verification (6-digit code), email + password login, resend, forgot/reset/change password; JWT access + rotating refresh tokens with reuse detection; global auth and role guards | `/auth/register`, `/auth/login`, `/auth/send-otp`, `/auth/verify-otp`, `/auth/refresh`, `/auth/logout`, `/auth/me` |
+| `users`         | Own profile                                                                                                                                                                                               | `GET/PATCH /users/me`                                                                                              |
+| `addresses`     | Customer addresses (max 10, one default)                                                                                                                                                                  | `/addresses` CRUD                                                                                                  |
+| `catalog`       | Categories and services; cached public catalog; admin CRUD with soft delete or deactivation                                                                                                               | `GET /categories`, `GET /services`, `/admin/categories`, `/admin/services`                                         |
+| `providers`     | Provider registration, profile, offerings and pricing, portfolio, private KYC documents, weekly availability, blocked dates, settings, dashboard, earnings; verification                                  | `POST /providers/register`, `/providers/me/*`, `/admin/providers/*`                                                |
+| `bookings`      | Booking creation (availability, daily cap, service area, idempotency, no double booking), state machine, history, events, privacy                                                                         | `/bookings`, `/providers/me/bookings/*`                                                                            |
+| `quotations`    | Provider quotations with server-computed totals, customer accept/decline, expiry job                                                                                                                      | `/providers/me/bookings/:id/quotations`, `/providers/me/quotations/:id/send`, `/bookings/:id/quotations/*`         |
+| `reviews`       | One review per completed booking, transactional rating recompute, public listing, moderation                                                                                                              | `POST /bookings/:id/review`, `GET /providers/:id/reviews`, `/admin/reviews`                                        |
+| `notifications` | Event-driven in-app notifications, push port, cursor pagination                                                                                                                                           | `/notifications`, `/notifications/unread-count`, `/notifications/:id/read`, `/notifications/read-all`              |
+| `disputes`      | Raise on eligible bookings; admin review and resolution that sets the booking's final status                                                                                                              | `/disputes`, `/admin/disputes/*`                                                                                   |
+| `audit`         | Audit rows from admin actions (in-transaction) and sensitive events (listeners); read-only API                                                                                                            | `GET /admin/audit-logs`                                                                                            |
+| `admin`         | Dashboard, booking and growth reports (Nepal time), user suspension, booking monitoring                                                                                                                   | `/admin/dashboard`, `/admin/reports/*`, `/admin/users/*`, `/admin/bookings/*`                                      |
+| `search`        | Public nearby search of verified, available providers (PostGIS `ST_DWithin`/`ST_Distance`, GiST index) with service, category, rating, price, experience, date and text filters; public provider profile  | `GET /providers`, `GET /providers/:id`                                                                             |
 
 ## Conventions
 
@@ -127,7 +127,7 @@ Every decision and its reason is recorded in [`docs/DECISIONS.md`](docs/DECISION
 
 ## Security
 
-Argon2id passwords; HMAC-hashed OTPs with 5-minute expiry, 5 attempts and per-phone limits; hashed, rotating refresh tokens with family revocation; suspension effective within seconds; per-IP throttling with a stricter limit on credential routes; helmet; CORS allow-list; private KYC files behind expiring HMAC-signed URLs; uploads checked by magic bytes; secrets and signed-URL queries redacted from logs; audit log for admin and sensitive actions. The e2e suite includes an IDOR matrix over every `:id` route, mass-assignment probes and a rate-limit test.
+Argon2id passwords; HMAC-hashed email codes with 10-minute expiry, 5 attempts and per-address limits; no session until the email is verified; hashed, rotating refresh tokens with family revocation; suspension effective within seconds; per-IP throttling with a stricter limit on credential routes; helmet; CORS allow-list; private KYC files behind expiring HMAC-signed URLs; uploads checked by magic bytes; secrets and signed-URL queries redacted from logs; audit log for admin and sensitive actions. The e2e suite includes an IDOR matrix over every `:id` route, mass-assignment probes and a rate-limit test.
 
 ## Testing
 
