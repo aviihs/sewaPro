@@ -3,7 +3,8 @@ import {
   UserProfileResponseDto,
   toUserProfileResponse,
 } from '../../../users/presentation/dto/user-profile.response.dto.js';
-import { type OtpSent } from '../../application/send-otp.use-case.js';
+import { type CodeSent } from '../../application/email-codes.js';
+import { type PendingRegistration } from '../../application/register-customer.use-case.js';
 import { type AuthSession } from '../../application/session-issuer.js';
 
 export class AuthSessionResponseDto {
@@ -29,12 +30,23 @@ export class AuthSessionResponseDto {
   readonly user: UserProfileResponseDto;
 }
 
-export class OtpSentResponseDto {
-  @ApiProperty({ description: 'Seconds until the code expires', example: 300 })
+export class CodeSentResponseDto {
+  @ApiProperty({ description: 'Seconds until the emailed code expires', example: 600 })
   readonly expiresInSeconds: number;
 
   @ApiProperty({ description: 'Seconds before another code can be requested', example: 60 })
   readonly resendAfterSeconds: number;
+}
+
+export class RegistrationResponseDto {
+  @ApiProperty({ type: UserProfileResponseDto })
+  readonly user: UserProfileResponseDto;
+
+  @ApiProperty({
+    type: CodeSentResponseDto,
+    description: 'A code was emailed; confirm it with POST /auth/verify-email to sign in',
+  })
+  readonly verification: CodeSentResponseDto;
 }
 
 export function toAuthSessionResponse(session: AuthSession): AuthSessionResponseDto {
@@ -47,4 +59,12 @@ export function toAuthSessionResponse(session: AuthSession): AuthSessionResponse
   };
 }
 
-export const toOtpSentResponse = (sent: OtpSent): OtpSentResponseDto => ({ ...sent });
+export const toCodeSentResponse = (sent: CodeSent): CodeSentResponseDto => ({
+  expiresInSeconds: sent.expiresInSeconds,
+  resendAfterSeconds: sent.resendAfterSeconds,
+});
+
+export const toRegistrationResponse = (pending: PendingRegistration): RegistrationResponseDto => ({
+  user: toUserProfileResponse(pending.user),
+  verification: toCodeSentResponse(pending.verification),
+});

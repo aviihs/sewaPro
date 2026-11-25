@@ -31,7 +31,8 @@ enum UserStatus {
 }
 
 enum OtpPurpose {
-  LOGIN
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
 }
 
 enum ProviderVerificationStatus {
@@ -129,6 +130,7 @@ model User {
   phone           String     @unique @db.VarChar(16)
   passwordHash    String?    @map("password_hash") @db.VarChar(255)
   phoneVerifiedAt DateTime?  @map("phone_verified_at") @db.Timestamptz(3)
+  emailVerifiedAt DateTime?  @map("email_verified_at") @db.Timestamptz(3)
   lastLoginAt     DateTime?  @map("last_login_at") @db.Timestamptz(3)
   createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -173,7 +175,7 @@ model RefreshToken {
 
 model OtpCode {
   id         String     @id @default(uuid(7)) @db.Uuid
-  phone      String     @db.VarChar(16)
+  recipient  String     @db.VarChar(254)
   purpose    OtpPurpose
   codeHash   String     @map("code_hash") @db.VarChar(64)
   attempts   Int        @default(0)
@@ -181,7 +183,7 @@ model OtpCode {
   consumedAt DateTime?  @map("consumed_at") @db.Timestamptz(3)
   createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  @@index([phone, purpose, createdAt])
+  @@index([recipient, purpose, createdAt])
   @@map("otp_codes")
 }
 

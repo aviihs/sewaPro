@@ -20,6 +20,8 @@ export abstract class UserRepository {
   abstract updateProfile(id: string, changes: ProfileChanges): Promise<User>;
   abstract recordLogin(id: string, at: Date): Promise<void>;
   abstract markPhoneVerified(id: string, at: Date): Promise<void>;
+  abstract markEmailVerified(id: string, at: Date): Promise<User>;
+  abstract updatePasswordHash(id: string, passwordHash: string): Promise<void>;
   abstract setStatus(id: string, status: UserStatus): Promise<User>;
   abstract list(filter: UserListFilter, page: PageRequest): Promise<PaginatedResult<User>>;
 }

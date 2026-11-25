@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { Role, type RequestContext } from '../../../common/auth/role.js';
+import { Role } from '../../../common/auth/role.js';
 import { PasswordHasher } from '../../../common/ports/password-hasher.port.js';
-import { UserStatus } from '../../users/domain/user.js';
+import { type User, UserStatus } from '../../users/domain/user.js';
 import { UserRepository } from '../../users/domain/user.repository.js';
-import { type AuthSession, SessionIssuer } from './session-issuer.js';
+import { OtpPurpose } from '../domain/otp.js';
+import { CODE_SENT, type CodeSent, EmailCodes } from './email-codes.js';
 
 export interface RegisterCustomerInput {
   readonly fullName: string;
@@ -12,16 +13,26 @@ export interface RegisterCustomerInput {
   readonly password: string;
 }
 
-/** Email + password sign-up for customers. The phone is verified later via OTP login. */
+/** A new account that must confirm its email before it can sign in. */
+export interface PendingRegistration {
+  readonly user: User;
+  readonly verification: CodeSent;
+}
+
+/**
+ * Email + password sign-up for customers. No session is issued: a code is
+ * emailed and POST /auth/verify-email signs the user in (D-088). The phone is
+ * stored unverified; phone verification comes later.
+ */
 @Injectable()
 export class RegisterCustomerUseCase {
   constructor(
     private readonly users: UserRepository,
     private readonly hasher: PasswordHasher,
-    private readonly sessions: SessionIssuer,
+    private readonly codes: EmailCodes,
   ) {}
 
-  async execute(input: RegisterCustomerInput, context: RequestContext): Promise<AuthSession> {
+  async execute(input: RegisterCustomerInput): Promise<PendingRegistration> {
     const user = await this.users.create({
       role: Role.CUSTOMER,
       status: UserStatus.ACTIVE,
@@ -30,7 +41,9 @@ export class RegisterCustomerUseCase {
       phone: input.phone,
       passwordHash: await this.hasher.hash(input.password),
       phoneVerifiedAt: null,
+      emailVerifiedAt: null,
     });
-    return this.sessions.start(user, context);
+    await this.codes.send(input.email, OtpPurpose.EMAIL_VERIFICATION, user.fullName);
+    return { user, verification: CODE_SENT };
   }
 }

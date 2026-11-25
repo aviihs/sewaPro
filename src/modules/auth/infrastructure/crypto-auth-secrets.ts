@@ -14,7 +14,7 @@ const OTP_DIGITS = 6;
 /**
  * Refresh tokens: 384 random bits, stored as SHA-256 (high entropy, so a fast
  * hash is sufficient). OTPs: HMAC-SHA256 keyed with a server pepper and bound
- * to the phone, so the 10^6 code space cannot be brute-forced from a DB leak.
+ * to the recipient, so the 10^6 code space cannot be brute-forced from a DB leak.
  */
 export class CryptoAuthSecrets extends AuthSecrets {
   constructor(private readonly otpPepper: string) {
@@ -35,12 +35,12 @@ export class CryptoAuthSecrets extends AuthSecrets {
       .padStart(OTP_DIGITS, '0');
   }
 
-  hashOtp(phone: string, code: string): string {
-    return createHmac('sha256', this.otpPepper).update(`${phone}:${code}`).digest('hex');
+  hashOtp(recipient: string, code: string): string {
+    return createHmac('sha256', this.otpPepper).update(`${recipient}:${code}`).digest('hex');
   }
 
-  otpMatches(phone: string, code: string, hash: string): boolean {
-    const candidate = Buffer.from(this.hashOtp(phone, code), 'hex');
+  otpMatches(recipient: string, code: string, hash: string): boolean {
+    const candidate = Buffer.from(this.hashOtp(recipient, code), 'hex');
     const stored = Buffer.from(hash, 'hex');
     return candidate.length === stored.length && timingSafeEqual(candidate, stored);
   }

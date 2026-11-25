@@ -4,3 +4,9 @@ coverage/
 bun.lock
 src/infrastructure/prisma/generated/
 prisma/migrations/
+
+# QA: generated artifacts (rebuilt by bun run qa:build / qa:all)
+qa/openapi.json
+qa/postman/*.json
+qa/reports/
+qa/fixtures/

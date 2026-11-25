@@ -1,22 +1,25 @@
-export const OtpPurpose = { LOGIN: 'LOGIN' } as const;
+export const OtpPurpose = {
+  EMAIL_VERIFICATION: 'EMAIL_VERIFICATION',
+  PASSWORD_RESET: 'PASSWORD_RESET',
+} as const;
 export type OtpPurpose = (typeof OtpPurpose)[keyof typeof OtpPurpose];
 
 export const OTP_POLICY = {
-  /** Code lifetime. */
-  ttlSeconds: 300,
+  /** Code lifetime (email can be slow, so 10 minutes). */
+  ttlSeconds: 600,
   /** Wrong guesses allowed per code before it is burned. */
   maxAttempts: 5,
-  /** Minimum gap between two codes for the same phone. */
+  /** Minimum gap between two codes for the same address. */
   resendCooldownSeconds: 60,
-  /** At most `maxSendsPerWindow` codes per phone per window. */
+  /** At most `maxSendsPerWindow` codes per address and purpose per window. */
   maxSendsPerWindow: 3,
   sendWindowSeconds: 900,
 } as const;
 
-/** A one-time code sent to a phone. Only an HMAC of the code is stored. */
+/** A one-time code sent to an email address. Only an HMAC of the code is stored. */
 export interface OtpChallenge {
   readonly id: string;
-  readonly phone: string;
+  readonly recipient: string;
   readonly purpose: OtpPurpose;
   readonly codeHash: string;
   readonly attempts: number;
@@ -26,7 +29,7 @@ export interface OtpChallenge {
 }
 
 export interface NewOtpChallenge {
-  readonly phone: string;
+  readonly recipient: string;
   readonly purpose: OtpPurpose;
   readonly codeHash: string;
   readonly expiresAt: Date;
@@ -55,10 +58,14 @@ export function otpSendRetryAfter(recentSendTimes: readonly Date[], now: Date): 
 
 export abstract class OtpChallengeRepository {
   abstract create(challenge: NewOtpChallenge): Promise<OtpChallenge>;
-  /** Send times for the phone since `since`, used for per-phone rate limiting. */
-  abstract sentSince(phone: string, purpose: OtpPurpose, since: Date): Promise<Date[]>;
-  /** Newest code that is unconsumed, unexpired and has attempts left. */
-  abstract findActive(phone: string, purpose: OtpPurpose, now: Date): Promise<OtpChallenge | null>;
+  /** Send times for the recipient since `since`, used for per-address rate limiting. */
+  abstract sentSince(recipient: string, purpose: OtpPurpose, since: Date): Promise<Date[]>;
+  /** Newest code that is unconsumed and unexpired. */
+  abstract findActive(
+    recipient: string,
+    purpose: OtpPurpose,
+    now: Date,
+  ): Promise<OtpChallenge | null>;
   /**
    * Atomically spends one attempt. Returns false when none are left, so
    * parallel guesses can never exceed `OTP_POLICY.maxAttempts`.
@@ -66,6 +73,6 @@ export abstract class OtpChallengeRepository {
   abstract consumeAttempt(id: string, maxAttempts: number): Promise<boolean>;
   /** Marks the code used; false if it was already used concurrently. */
   abstract markConsumed(id: string, at: Date): Promise<boolean>;
-  /** Burns every outstanding code for the phone (called when a new code is issued). */
-  abstract invalidateActive(phone: string, purpose: OtpPurpose, at: Date): Promise<void>;
+  /** Burns every outstanding code for the recipient (called when a new code is issued). */
+  abstract invalidateActive(recipient: string, purpose: OtpPurpose, at: Date): Promise<void>;
 }

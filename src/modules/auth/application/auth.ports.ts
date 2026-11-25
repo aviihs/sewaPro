@@ -14,10 +14,10 @@ export abstract class AuthSecrets {
   abstract hashRefreshToken(token: string): string;
   /** Uniformly random 6-digit code. */
   abstract newOtpCode(): string;
-  /** HMAC bound to the phone, so a leaked hash cannot be brute-forced offline. */
-  abstract hashOtp(phone: string, code: string): string;
+  /** HMAC bound to the recipient, so a leaked hash cannot be brute-forced offline. */
+  abstract hashOtp(recipient: string, code: string): string;
   /** Constant-time comparison of a candidate code against a stored hash. */
-  abstract otpMatches(phone: string, code: string, hash: string): boolean;
+  abstract otpMatches(recipient: string, code: string, hash: string): boolean;
   abstract newId(): string;
 }
 

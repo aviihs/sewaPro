@@ -21,6 +21,8 @@ export default tseslint.config(
       'eslint.config.mjs',
       'vitest.config.ts',
       'vitest.config.e2e.ts',
+      // Postman sandbox code (not Node): checked by running the collection.
+      'qa/postman/sandbox/**',
     ],
   },
   eslint.configs.recommended,

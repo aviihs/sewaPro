@@ -17,6 +17,7 @@ export interface UserProps {
   readonly phone: string;
   readonly passwordHash: string | null;
   readonly phoneVerifiedAt: Date | null;
+  readonly emailVerifiedAt: Date | null;
   readonly lastLoginAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -31,11 +32,14 @@ export interface NewUser {
   readonly phone: string;
   readonly passwordHash: string | null;
   readonly phoneVerifiedAt: Date | null;
+  readonly emailVerifiedAt: Date | null;
 }
 
 export interface ProfileChanges {
   readonly fullName?: string;
   readonly email?: string | null;
+  /** Reset to null when the email changes: the new address must be verified again. */
+  readonly emailVerifiedAt?: Date | null;
 }
 
 /** An account (customer, provider or admin). Immutable: changes return new instances. */
@@ -48,6 +52,7 @@ export class User implements UserProps {
   readonly phone: string;
   readonly passwordHash: string | null;
   readonly phoneVerifiedAt: Date | null;
+  readonly emailVerifiedAt: Date | null;
   readonly lastLoginAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -67,5 +72,10 @@ export class User implements UserProps {
 
   get isPhoneVerified(): boolean {
     return this.phoneVerifiedAt !== null;
+  }
+
+  /** Password sign-in needs a verified email (D-088). */
+  get isEmailVerified(): boolean {
+    return this.emailVerifiedAt !== null;
   }
 }

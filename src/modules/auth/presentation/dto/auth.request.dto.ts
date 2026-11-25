@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, Length, Matches, MaxLength } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsString, Length, Matches, MaxLength } from 'class-validator';
 import {
   IsNepalPhone,
   NormalizePhone,
@@ -9,6 +9,13 @@ import {
 
 export const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d).+$/;
 const PASSWORD_MESSAGE = 'password must contain at least one letter and one digit';
+const NEW_PASSWORD_PROPERTY = {
+  description: 'New password: 8 to 128 characters with at least one letter and one digit',
+  example: 'Pokhara2031',
+  minLength: 8,
+  maxLength: 128,
+  format: 'password',
+} as const;
 
 export class RegisterRequestDto {
   @ApiProperty({ description: 'Full name', example: 'Aarati Sharma', minLength: 2, maxLength: 100 })
@@ -24,7 +31,7 @@ export class RegisterRequestDto {
   readonly email: string;
 
   @ApiProperty({
-    description: 'Nepal mobile number; normalized to E.164',
+    description: 'Nepal mobile number; normalized to E.164 (stored unverified for now)',
     example: '9841234567',
   })
   @NormalizePhone()
@@ -57,35 +64,53 @@ export class LoginRequestDto {
   readonly password: string;
 }
 
-export class SendOtpRequestDto {
-  @ApiProperty({ description: 'Nepal mobile number to receive the code', example: '9841234567' })
-  @NormalizePhone()
-  @IsNepalPhone()
-  readonly phone: string;
+const CODE_PROPERTY = {
+  description: '6-digit code from the email',
+  example: '482913',
+  pattern: '^\\d{6}$',
+} as const;
+
+class EmailField {
+  @ApiProperty({ description: 'Account email', example: 'aarati@example.com' })
+  @TrimLower()
+  @IsEmail()
+  @MaxLength(254)
+  readonly email: string;
 }
 
-export class VerifyOtpRequestDto {
-  @ApiProperty({ description: 'Phone the code was sent to', example: '9841234567' })
-  @NormalizePhone()
-  @IsNepalPhone()
-  readonly phone: string;
+export class VerifyEmailRequestDto extends EmailField {
+  @ApiProperty(CODE_PROPERTY)
+  @IsString()
+  @Matches(/^\d{6}$/, { message: 'code must be 6 digits' })
+  readonly code: string;
+}
 
-  @ApiProperty({ description: '6-digit code from the SMS', example: '482913', pattern: '^\\d{6}$' })
+export class EmailRequestDto extends EmailField {}
+
+export class ResetPasswordRequestDto extends EmailField {
+  @ApiProperty(CODE_PROPERTY)
   @IsString()
   @Matches(/^\d{6}$/, { message: 'code must be 6 digits' })
   readonly code: string;
 
-  @ApiPropertyOptional({
-    description: 'Required only on first sign-in for a new phone (creates a customer account)',
-    example: 'Nabin Rai',
-    minLength: 2,
-    maxLength: 100,
-  })
-  @IsOptional()
-  @Trim()
+  @ApiProperty(NEW_PASSWORD_PROPERTY)
   @IsString()
-  @Length(2, 100)
-  readonly fullName?: string;
+  @Length(8, 128)
+  @Matches(PASSWORD_RULE, { message: 'newPassword must contain at least one letter and one digit' })
+  readonly newPassword: string;
+}
+
+export class ChangePasswordRequestDto {
+  @ApiProperty({ description: 'Current password', example: 'Kathmandu2030', format: 'password' })
+  @IsString()
+  @Length(1, 128)
+  readonly currentPassword: string;
+
+  @ApiProperty(NEW_PASSWORD_PROPERTY)
+  @IsString()
+  @Length(8, 128)
+  @Matches(PASSWORD_RULE, { message: 'newPassword must contain at least one letter and one digit' })
+  readonly newPassword: string;
 }
 
 export class RefreshTokenRequestDto {

@@ -382,6 +382,16 @@ Indexes were checked against every list filter and sort and the missing ones add
 - The quotation expiry job runs on every instance (idempotent).
 - Messaging uses development adapters; production needs SMS/email/push gateways.
 
+## QA suite
+
+### D-086 Postman/Newman suite generated from TypeScript
+
+`qa/` holds a black-box suite run by Newman (`bun run qa:all`). The collection is generated from a small TypeScript DSL (`qa/postman/build`) instead of hand-edited JSON, so 1,000+ requests stay reviewable and every request gets the same generated test script: status, timing, envelope, error code, documented status, Ajv validation against the OpenAPI schema with closed objects, sensitive-field scan, UUID ids and pagination maths. Folder 14b is generated from the spec and the controllers (401 ×3, 403 per disallowed role, 400 bad UUID, 404 unknown id, 400 unknown or missing body fields) and has no side effects. `qa:coverage` fails below 100% of spec operations; `qa:inventory` fails if the spec and controllers disagree.
+
+### D-087 QA control server and known-bug markers
+
+Things a black-box test cannot do (read a development OTP, wait for expiry, sign an expired token) go through `qa/scripts/control-server.ts`, test tooling bound to 127.0.0.1 that refuses any database not named `*_test`. It shifts timestamps relative to values the API wrote, so the tests hold even under BUG-001. Defects found are recorded in `qa/BUGS.md` and marked in the collection: while a bug reproduces, its assertion is reported as skipped with its id; when it stops reproducing, the assertion fails and asks for the marker to be removed. Application code was not changed by the QA work.
+
 ## Out of scope (intentionally absent)
 
 Payments, transactions, eSewa/Khalti, commission, payouts, chat, live tracking, AI recommendations, subscriptions. No tables, enums, modules or endpoints exist for them. Bookings will emit domain events (Step 7) so a future `payments` module can subscribe without modifying existing modules.

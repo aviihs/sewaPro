@@ -5,7 +5,7 @@ import { AccountSuspendedError } from '../../../common/errors/auth.errors.js';
 import { Clock } from '../../../common/ports/clock.port.js';
 import { PasswordHasher } from '../../../common/ports/password-hasher.port.js';
 import { UserRepository } from '../../users/domain/user.repository.js';
-import { InvalidCredentialsError } from '../domain/auth.errors.js';
+import { EmailNotVerifiedError, InvalidCredentialsError } from '../domain/auth.errors.js';
 import { type AuthSession, SessionIssuer } from './session-issuer.js';
 
 export interface LoginInput {
@@ -16,7 +16,8 @@ export interface LoginInput {
 /**
  * Email + password login. Unknown emails and wrong passwords produce the same
  * error after the same amount of hashing work, so accounts cannot be enumerated.
- * Suspension is only revealed to someone who knows the password.
+ * Suspension and an unverified email are only revealed to someone who knows
+ * the password.
  */
 @Injectable()
 export class LoginUseCase {
@@ -39,6 +40,7 @@ export class LoginUseCase {
       throw new InvalidCredentialsError();
     }
     if (!user.canLogin) throw new AccountSuspendedError();
+    if (!user.isEmailVerified) throw new EmailNotVerifiedError();
 
     await this.users.recordLogin(user.id, this.clock.now());
     return this.sessions.start(user, context);

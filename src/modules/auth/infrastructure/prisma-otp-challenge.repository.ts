@@ -17,17 +17,21 @@ export class PrismaOtpChallengeRepository extends OtpChallengeRepository {
     return this.host.client.otpCode.create({ data: challenge });
   }
 
-  async sentSince(phone: string, purpose: OtpPurpose, since: Date): Promise<Date[]> {
+  async sentSince(recipient: string, purpose: OtpPurpose, since: Date): Promise<Date[]> {
     const rows = await this.host.client.otpCode.findMany({
-      where: { phone, purpose, createdAt: { gt: since } },
+      where: { recipient, purpose, createdAt: { gt: since } },
       select: { createdAt: true },
     });
     return rows.map((r) => r.createdAt);
   }
 
-  async findActive(phone: string, purpose: OtpPurpose, now: Date): Promise<OtpChallenge | null> {
+  async findActive(
+    recipient: string,
+    purpose: OtpPurpose,
+    now: Date,
+  ): Promise<OtpChallenge | null> {
     return this.host.client.otpCode.findFirst({
-      where: { phone, purpose, consumedAt: null, expiresAt: { gt: now } },
+      where: { recipient, purpose, consumedAt: null, expiresAt: { gt: now } },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -48,9 +52,9 @@ export class PrismaOtpChallengeRepository extends OtpChallengeRepository {
     return count === 1;
   }
 
-  async invalidateActive(phone: string, purpose: OtpPurpose, at: Date): Promise<void> {
+  async invalidateActive(recipient: string, purpose: OtpPurpose, at: Date): Promise<void> {
     await this.host.client.otpCode.updateMany({
-      where: { phone, purpose, consumedAt: null },
+      where: { recipient, purpose, consumedAt: null },
       data: { consumedAt: at },
     });
   }

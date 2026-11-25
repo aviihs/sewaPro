@@ -30,8 +30,11 @@ export class UserProfileResponseDto {
   @ApiProperty({ description: 'Mobile number, E.164', example: '+9779841234567' })
   readonly phone: string;
 
-  @ApiProperty({ description: 'Whether the phone was verified by OTP', example: true })
+  @ApiProperty({ description: 'Whether the phone was verified by OTP', example: false })
   readonly phoneVerified: boolean;
+
+  @ApiProperty({ description: 'Whether the email was verified with a code', example: true })
+  readonly emailVerified: boolean;
 
   @ApiProperty({ description: 'Account creation time', example: '2030-01-01T10:00:00.000Z' })
   readonly createdAt: Date;
@@ -47,6 +50,7 @@ export function toUserProfileResponse(user: User): UserProfileResponseDto {
     email: user.email,
     phone: user.phone,
     phoneVerified: user.isPhoneVerified,
+    emailVerified: user.isEmailVerified,
     createdAt: user.createdAt,
   };
 }

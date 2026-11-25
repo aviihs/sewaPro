@@ -34,19 +34,19 @@ export class OtpInvalidError extends DomainError {
   }
 }
 
-export class OtpRateLimitedError extends DomainError {
-  readonly code = 'OTP_RATE_LIMITED';
-  readonly kind = 'RATE_LIMITED';
-  constructor(retryAfterSeconds: number) {
-    super('Too many codes requested for this phone; try again later', { retryAfterSeconds });
+/** Correct password, but the email has not been confirmed with a code yet. */
+export class EmailNotVerifiedError extends DomainError {
+  readonly code = 'EMAIL_NOT_VERIFIED';
+  readonly kind = 'FORBIDDEN';
+  constructor() {
+    super('Verify your email with the code we sent before signing in');
   }
 }
 
-/** First OTP login for a new phone: a name is needed to create the account. */
-export class FullNameRequiredError extends DomainError {
-  readonly code = 'FULL_NAME_REQUIRED';
+export class CurrentPasswordIncorrectError extends DomainError {
+  readonly code = 'CURRENT_PASSWORD_INCORRECT';
   readonly kind = 'BUSINESS_RULE';
   constructor() {
-    super('No account exists for this phone yet; provide fullName to create one');
+    super('The current password is incorrect');
   }
 }

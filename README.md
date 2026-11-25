@@ -133,6 +133,7 @@ Argon2id passwords; HMAC-hashed OTPs with 5-minute expiry, 5 attempts and per-ph
 
 - `bun run test` — unit tests for every use case and domain rule (repositories mocked through their ports), including an exhaustive 256-case test of the booking state machine. Coverage of domain + application layers ≈ 97%.
 - `bun run test:e2e` — the real `AppModule` against `sewapro_test`: every module's happy path, validation and 401/403/404/409 cases, database constraints (including concurrent double booking), the full marketplace journey, security checks, and an OpenAPI contract test that fails if any route lacks tags, summary, success or error responses.
+- `bun run qa:all` — the Postman/Newman QA suite in [`qa/`](qa/README.md): about 1,000 requests over all 98 operations with contract checks on every response (schema, envelope, sensitive fields, pagination), the business flows, an IDOR matrix and generated 401/403/400/404 negatives; fails below 100% operation coverage. Defects found are in [`qa/BUGS.md`](qa/BUGS.md).
 
 ## Adding a module
 
@@ -170,3 +171,4 @@ No existing module needs to change except for wiring the new module into `AppMod
 10. ✅ Notifications, audit, disputes
 11. ✅ Admin dashboard, reports, moderation
 12. ✅ Hardening, full e2e, docs
+13. ✅ Postman/Newman QA suite (`qa/`)

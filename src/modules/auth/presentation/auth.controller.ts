@@ -18,20 +18,24 @@ import { LoginUseCase } from '../application/login.use-case.js';
 import { LogoutUseCase } from '../application/logout.use-case.js';
 import { RefreshSessionUseCase } from '../application/refresh-session.use-case.js';
 import { RegisterCustomerUseCase } from '../application/register-customer.use-case.js';
-import { SendOtpUseCase } from '../application/send-otp.use-case.js';
-import { VerifyOtpUseCase } from '../application/verify-otp.use-case.js';
 import {
+  ResendVerificationUseCase,
+  VerifyEmailUseCase,
+} from '../application/email-verification.use-cases.js';
+import {
+  EmailRequestDto,
   LoginRequestDto,
   RefreshTokenRequestDto,
   RegisterRequestDto,
-  SendOtpRequestDto,
-  VerifyOtpRequestDto,
+  VerifyEmailRequestDto,
 } from './dto/auth.request.dto.js';
 import {
   AuthSessionResponseDto,
-  OtpSentResponseDto,
+  CodeSentResponseDto,
+  RegistrationResponseDto,
   toAuthSessionResponse,
-  toOtpSentResponse,
+  toCodeSentResponse,
+  toRegistrationResponse,
 } from './dto/auth.response.dto.js';
 
 @ApiTags('Auth')
@@ -40,8 +44,8 @@ export class AuthController {
   constructor(
     private readonly registerCustomer: RegisterCustomerUseCase,
     private readonly login: LoginUseCase,
-    private readonly sendOtp: SendOtpUseCase,
-    private readonly verifyOtp: VerifyOtpUseCase,
+    private readonly verifyEmail: VerifyEmailUseCase,
+    private readonly resendVerification: ResendVerificationUseCase,
     private readonly refreshSession: RefreshSessionUseCase,
     private readonly logoutSession: LogoutUseCase,
     private readonly getMyProfile: GetMyProfileUseCase,
@@ -50,24 +54,25 @@ export class AuthController {
   @Public()
   @SensitiveRateLimit()
   @Post('register')
-  @ApiOperation({ summary: 'Register a customer with email, phone and password' })
-  @ApiEnvelopeResponse(AuthSessionResponseDto, {
-    description: 'Account created and signed in',
+  @ApiOperation({
+    summary: 'Register a customer with email, phone and password; emails a verification code',
+  })
+  @ApiEnvelopeResponse(RegistrationResponseDto, {
+    description: 'Account created; verify the email to sign in',
     status: HttpStatus.CREATED,
   })
   @ApiErrors(400, 409, 429)
-  async register(
-    @Body() body: RegisterRequestDto,
-    @ReqContext() context: RequestContext,
-  ): Promise<AuthSessionResponseDto> {
-    return toAuthSessionResponse(await this.registerCustomer.execute(body, context));
+  async register(@Body() body: RegisterRequestDto): Promise<RegistrationResponseDto> {
+    return toRegistrationResponse(await this.registerCustomer.execute(body));
   }
 
   @Public()
   @SensitiveRateLimit()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Sign in with email and password' })
+  @ApiOperation({
+    summary: 'Sign in with email and password (403 EMAIL_NOT_VERIFIED until the email is verified)',
+  })
   @ApiEnvelopeResponse(AuthSessionResponseDto, { description: 'Signed in' })
   @ApiErrors(400, 401, 403, 429)
   async signIn(
@@ -79,33 +84,30 @@ export class AuthController {
 
   @Public()
   @SensitiveRateLimit()
-  @Post('send-otp')
+  @Post('verify-email')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary:
-      'Send a 6-digit login code by SMS (same response whether or not the phone is registered)',
-  })
-  @ApiEnvelopeResponse(OtpSentResponseDto, { description: 'Code sent' })
-  @ApiErrors(400, 429)
-  async requestOtp(@Body() body: SendOtpRequestDto): Promise<OtpSentResponseDto> {
-    return toOtpSentResponse(await this.sendOtp.execute(body.phone));
+  @ApiOperation({ summary: 'Confirm the email with the emailed 6-digit code and sign in' })
+  @ApiEnvelopeResponse(AuthSessionResponseDto, { description: 'Email verified, signed in' })
+  @ApiErrors(400, 401, 403, 429)
+  async confirmEmail(
+    @Body() body: VerifyEmailRequestDto,
+    @ReqContext() context: RequestContext,
+  ): Promise<AuthSessionResponseDto> {
+    return toAuthSessionResponse(await this.verifyEmail.execute(body, context));
   }
 
   @Public()
   @SensitiveRateLimit()
-  @Post('verify-otp')
+  @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Sign in with phone + code (creates a customer account on first use when fullName is given)',
+      'Email a new verification code (same response whether or not the account exists or is verified)',
   })
-  @ApiEnvelopeResponse(AuthSessionResponseDto, { description: 'Signed in' })
-  @ApiErrors(400, 401, 403, 422, 429)
-  async confirmOtp(
-    @Body() body: VerifyOtpRequestDto,
-    @ReqContext() context: RequestContext,
-  ): Promise<AuthSessionResponseDto> {
-    return toAuthSessionResponse(await this.verifyOtp.execute(body, context));
+  @ApiEnvelopeResponse(CodeSentResponseDto, { description: 'Code sent if the account needs one' })
+  @ApiErrors(400, 429)
+  async resend(@Body() body: EmailRequestDto): Promise<CodeSentResponseDto> {
+    return toCodeSentResponse(await this.resendVerification.execute(body.email));
   }
 
   @Public()

@@ -10,6 +10,7 @@ export const aUser = (overrides: Partial<UserProps> = {}): User =>
     phone: '+9779841234567',
     passwordHash: 'hash',
     phoneVerifiedAt: null,
+    emailVerifiedAt: new Date('2030-01-01T00:00:00Z'),
     lastLoginAt: null,
     createdAt: new Date('2030-01-01T00:00:00Z'),
     updatedAt: new Date('2030-01-01T00:00:00Z'),

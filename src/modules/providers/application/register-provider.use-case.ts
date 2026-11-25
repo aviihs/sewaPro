@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Role, type RequestContext } from '../../../common/auth/role.js';
+import { Role } from '../../../common/auth/role.js';
 import { Clock } from '../../../common/ports/clock.port.js';
 import { PasswordHasher } from '../../../common/ports/password-hasher.port.js';
 import { UnitOfWork } from '../../../common/ports/unit-of-work.port.js';
-import { type AuthSession, SessionIssuer } from '../../auth/application/session-issuer.js';
+import { CODE_SENT, EmailCodes } from '../../auth/application/email-codes.js';
+import { type PendingRegistration } from '../../auth/application/register-customer.use-case.js';
+import { OtpPurpose } from '../../auth/domain/otp.js';
 import { UserStatus } from '../../users/domain/user.js';
 import { UserRepository } from '../../users/domain/user.repository.js';
 import { DEFAULT_SETTINGS } from '../domain/availability.js';
@@ -24,8 +26,9 @@ export interface RegisterProviderInput {
 
 /**
  * Creates the PROVIDER account (status PENDING) and the provider profile
- * (PENDING_VERIFICATION) atomically, then signs the user in so they can
- * upload documents. Invisible to customers until an admin verifies it.
+ * (PENDING_VERIFICATION) atomically, then emails a verification code. The
+ * provider signs in with POST /auth/verify-email (D-088) to upload documents.
+ * Invisible to customers until an admin verifies it.
  */
 @Injectable()
 export class RegisterProviderUseCase {
@@ -33,12 +36,12 @@ export class RegisterProviderUseCase {
     private readonly users: UserRepository,
     private readonly providers: ProviderRepository,
     private readonly hasher: PasswordHasher,
-    private readonly sessions: SessionIssuer,
+    private readonly codes: EmailCodes,
     private readonly clock: Clock,
     private readonly uow: UnitOfWork,
   ) {}
 
-  async execute(input: RegisterProviderInput, context: RequestContext): Promise<AuthSession> {
+  async execute(input: RegisterProviderInput): Promise<PendingRegistration> {
     const passwordHash = await this.hasher.hash(input.password);
     const user = await this.uow.run(async () => {
       const created = await this.users.create({
@@ -49,6 +52,7 @@ export class RegisterProviderUseCase {
         phone: input.phone,
         passwordHash,
         phoneVerifiedAt: null,
+        emailVerifiedAt: null,
       });
       await this.providers.create(
         {
@@ -65,6 +69,7 @@ export class RegisterProviderUseCase {
       );
       return created;
     });
-    return this.sessions.start(user, context);
+    await this.codes.send(input.email, OtpPurpose.EMAIL_VERIFICATION, user.fullName);
+    return { user, verification: CODE_SENT };
   }
 }

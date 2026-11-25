@@ -30,7 +30,14 @@
     "db:seed": "bun run build && node dist/src/infrastructure/prisma/seed/run-seed.js",
     "verify": "bun run format:check && bun run lint && bun run typecheck && bun run deps:cycles && bun run build && bun run test",
     "prepare": "husky || true",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "qa:seed": "node qa/scripts/seed.ts",
+    "qa:start": "node qa/scripts/start.ts",
+    "qa:inventory": "node qa/scripts/inventory.ts",
+    "qa:build": "node qa/postman/build/build.ts && node qa/scripts/traceability.ts",
+    "qa:run": "node qa/scripts/run.ts",
+    "qa:coverage": "node qa/scripts/check-coverage.ts",
+    "qa:all": "node qa/scripts/all.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.6.0",
@@ -63,6 +70,7 @@
     "@nestjs/schematics": "^12.0.0",
     "@nestjs/testing": "^12.6.0",
     "@types/express": "^5.0.0",
+    "@types/newman": "^5.3.6",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.16.0",
     "@types/supertest": "^7.0.0",

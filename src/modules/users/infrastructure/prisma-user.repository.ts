@@ -20,6 +20,7 @@ export function toUser(row: UserRow): User {
     phone: row.phone,
     passwordHash: row.passwordHash,
     phoneVerifiedAt: row.phoneVerifiedAt,
+    emailVerifiedAt: row.emailVerifiedAt,
     lastLoginAt: row.lastLoginAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -75,6 +76,14 @@ export class PrismaUserRepository extends UserRepository {
 
   async markPhoneVerified(id: string, at: Date): Promise<void> {
     await this.db.user.update({ where: { id }, data: { phoneVerifiedAt: at } });
+  }
+
+  async markEmailVerified(id: string, at: Date): Promise<User> {
+    return toUser(await this.db.user.update({ where: { id }, data: { emailVerifiedAt: at } }));
+  }
+
+  async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
+    await this.db.user.update({ where: { id }, data: { passwordHash } });
   }
 
   async setStatus(id: string, status: UserStatus): Promise<User> {

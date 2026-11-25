@@ -58,6 +58,7 @@ bunx prettier --write src test         # run after edits: Prettier reflows lines
 bun run verify                         # format, lint, typecheck, cycles, build, unit tests
 bun run test:e2e                       # applies migrations to sewapro_test, then runs the e2e suites
 bun run test:cov                       # coverage (threshold 80%)
+bun run qa:all                         # Postman/Newman suite on :3100 against sewapro_test (see qa/README.md)
 ```
 
 - Seed admin credentials: `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` in `.env` (git-ignored).
@@ -121,6 +122,11 @@ Useful test helpers:
 - CI uses `postgis/postgis:18-3.6`.
 
 ## 7. Known limitations / later ideas
+
+- **QA suite found 6 defects, none fixed yet (owner decides): see `qa/BUGS.md`.** The important one is
+  BUG-001: the local PostgreSQL `timezone` is `Asia/Kathmandu`, and timestamps the app writes are stored
+  5 h 45 m off. Because of it, `test/admin.e2e-spec.ts` (booking report) **fails when run between 00:00 and
+  05:45 NPT**. The suggested fix is a one-line UTC session pin in `PrismaService`.
 
 - `booking_images` table exists but has no upload endpoint (D-060).
 - Throttler, cache and events are in-process. Running more than one instance needs Redis plus an outbox.

@@ -37,7 +37,12 @@ async function ensureUser(prisma: PrismaClient, hasher: PasswordHasher, input: U
   if (existing) return existing;
   const { password, ...data } = input;
   return prisma.user.create({
-    data: { ...data, passwordHash: await hasher.hash(password), phoneVerifiedAt: new Date() },
+    data: {
+      ...data,
+      passwordHash: await hasher.hash(password),
+      phoneVerifiedAt: new Date(),
+      emailVerifiedAt: new Date(),
+    },
   });
 }
 
