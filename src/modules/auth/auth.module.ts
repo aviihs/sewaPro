@@ -9,9 +9,17 @@ import { LoginUseCase } from './application/login.use-case.js';
 import { LogoutUseCase } from './application/logout.use-case.js';
 import { RefreshSessionUseCase } from './application/refresh-session.use-case.js';
 import { RegisterCustomerUseCase } from './application/register-customer.use-case.js';
-import { SendOtpUseCase } from './application/send-otp.use-case.js';
+import { EmailCodes } from './application/email-codes.js';
+import {
+  ResendVerificationUseCase,
+  VerifyEmailUseCase,
+} from './application/email-verification.use-cases.js';
+import {
+  ChangePasswordUseCase,
+  ForgotPasswordUseCase,
+  ResetPasswordUseCase,
+} from './application/password-reset.use-cases.js';
 import { SessionIssuer } from './application/session-issuer.js';
-import { VerifyOtpUseCase } from './application/verify-otp.use-case.js';
 import { OtpChallengeRepository } from './domain/otp.js';
 import { RefreshTokenRepository } from './domain/refresh-token.js';
 import { CryptoAuthSecrets } from './infrastructure/crypto-auth-secrets.js';
@@ -23,6 +31,7 @@ import {
 import { PrismaOtpChallengeRepository } from './infrastructure/prisma-otp-challenge.repository.js';
 import { PrismaRefreshTokenRepository } from './infrastructure/prisma-refresh-token.repository.js';
 import { AuthController } from './presentation/auth.controller.js';
+import { PasswordController } from './presentation/password.controller.js';
 import { JwtAuthGuard } from './presentation/guards/jwt-auth.guard.js';
 import { RolesGuard } from './presentation/guards/roles.guard.js';
 
@@ -42,7 +51,7 @@ import { RolesGuard } from './presentation/guards/roles.guard.js';
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, PasswordController],
   providers: [
     { provide: AccessTokenService, useClass: JwtAccessTokenService },
     { provide: RefreshTokenRepository, useClass: PrismaRefreshTokenRepository },
@@ -61,16 +70,20 @@ import { RolesGuard } from './presentation/guards/roles.guard.js';
       }),
     },
     SessionIssuer,
+    EmailCodes,
     AuthenticateAccessTokenUseCase,
     RegisterCustomerUseCase,
     LoginUseCase,
-    SendOtpUseCase,
-    VerifyOtpUseCase,
+    VerifyEmailUseCase,
+    ResendVerificationUseCase,
+    ForgotPasswordUseCase,
+    ResetPasswordUseCase,
+    ChangePasswordUseCase,
     RefreshSessionUseCase,
     LogoutUseCase,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
-  exports: [SessionIssuer, RefreshTokenRepository],
+  exports: [SessionIssuer, EmailCodes, RefreshTokenRepository],
 })
 export class AuthModule {}

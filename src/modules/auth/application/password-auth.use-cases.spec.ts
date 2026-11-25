@@ -4,9 +4,10 @@ import { FixedClock, mockOf } from '../../../../test/unit/mock.js';
 import { AccountSuspendedError } from '../../../common/errors/auth.errors.js';
 import { PasswordHasher } from '../../../common/ports/password-hasher.port.js';
 import { UserRepository } from '../../users/domain/user.repository.js';
-import { InvalidCredentialsError } from '../domain/auth.errors.js';
+import { EmailNotVerifiedError, InvalidCredentialsError } from '../domain/auth.errors.js';
 import { RefreshTokenRepository } from '../domain/refresh-token.js';
 import { AccessTokenService, AuthSecrets, AuthSettings } from './auth.ports.js';
+import { EmailCodes } from './email-codes.js';
 import { LoginUseCase } from './login.use-case.js';
 import { RegisterCustomerUseCase } from './register-customer.use-case.js';
 import { SessionIssuer } from './session-issuer.js';
@@ -67,18 +68,14 @@ describe('SessionIssuer', () => {
 });
 
 describe('RegisterCustomerUseCase', () => {
-  it('creates an active customer with a hashed password and signs in', async () => {
+  it('creates an unverified customer with a hashed password and emails a code, no session', async () => {
     const users = mockOf<UserRepository>();
     const hasher = mockOf<PasswordHasher>();
-    const sessions = mockOf<SessionIssuer>();
+    const codes = mockOf<EmailCodes>();
     hasher.hash.mockResolvedValue('argon-hash');
-    users.create.mockResolvedValue(aUser());
-    sessions.start.mockResolvedValue({
-      accessToken: 'a',
-      refreshToken: 'r',
-      expiresIn: 900,
-      user: aUser(),
-    });
+    const created = aUser({ emailVerifiedAt: null });
+    users.create.mockResolvedValue(created);
+    codes.send.mockResolvedValue(true);
 
     const input = {
       fullName: 'A',
@@ -86,7 +83,7 @@ describe('RegisterCustomerUseCase', () => {
       phone: '+9779841234567',
       password: 'pass1234',
     };
-    await new RegisterCustomerUseCase(users, hasher, sessions).execute(input, context);
+    const result = await new RegisterCustomerUseCase(users, hasher, codes).execute(input);
 
     expect(users.create).toHaveBeenCalledWith({
       role: 'CUSTOMER',
@@ -96,8 +93,13 @@ describe('RegisterCustomerUseCase', () => {
       phone: '+9779841234567',
       passwordHash: 'argon-hash',
       phoneVerifiedAt: null,
+      emailVerifiedAt: null,
     });
-    expect(sessions.start).toHaveBeenCalledWith(aUser(), context);
+    expect(codes.send).toHaveBeenCalledWith('a@x.com', 'EMAIL_VERIFICATION', 'Aarati Sharma');
+    expect(result).toEqual({
+      user: created,
+      verification: { expiresInSeconds: 600, resendAfterSeconds: 60 },
+    });
   });
 });
 
@@ -152,5 +154,14 @@ describe('LoginUseCase', () => {
     hasher.verify.mockResolvedValue(true);
     await expect(useCase.execute(input, context)).rejects.toBeInstanceOf(AccountSuspendedError);
     expect(users.recordLogin).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unverified email only after a correct password', async () => {
+    users.findByEmail.mockResolvedValue(aUser({ emailVerifiedAt: null }));
+    hasher.verify.mockResolvedValue(true);
+    await expect(useCase.execute(input, context)).rejects.toBeInstanceOf(EmailNotVerifiedError);
+    hasher.verify.mockResolvedValue(false);
+    await expect(useCase.execute(input, context)).rejects.toBeInstanceOf(InvalidCredentialsError);
+    expect(sessions.start).not.toHaveBeenCalled();
   });
 });

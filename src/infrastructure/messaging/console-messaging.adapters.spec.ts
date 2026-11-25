@@ -17,9 +17,19 @@ describe('console messaging adapters', () => {
     ]);
   });
 
-  it('logs only the subject/title for email and push', async () => {
+  it('logs email bodies only outside production, masking the address', async () => {
     const log = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
-    await new ConsoleEmailSender().send('ram@example.com', 'Welcome', 'secret body');
+    await new ConsoleEmailSender(true).send('ram@example.com', 'Verify', 'Code:\n123456');
+    await new ConsoleEmailSender(false).send('ram@example.com', 'Verify', 'Code:\n123456');
+    expect(log.mock.calls.map(([message]) => String(message))).toEqual([
+      'to ***@example.com: Verify | Code: 123456',
+      'to ***@example.com: Verify',
+    ]);
+  });
+
+  it('logs only the subject/title in production and for push', async () => {
+    const log = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    await new ConsoleEmailSender(false).send('ram@example.com', 'Welcome', 'secret body');
     await new ConsolePushSender().send('user-1', 'Booking accepted', 'secret body');
     expect(JSON.stringify(log.mock.calls)).not.toContain('secret body');
     expect(JSON.stringify(log.mock.calls)).not.toContain('ram@');

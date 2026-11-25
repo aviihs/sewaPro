@@ -1,6 +1,6 @@
 import type { Test } from 'supertest';
 import { SAMPLE_FILES } from '../unit/fixtures/files.js';
-import { TEST_PASSWORD, type TestUser, nextPhone } from './auth.js';
+import { TEST_PASSWORD, type TestUser, nextPhone, verifyEmail } from './auth.js';
 import { type TestContext } from './create-test-app.js';
 
 export interface TestProvider extends TestUser {
@@ -9,7 +9,7 @@ export interface TestProvider extends TestUser {
 
 export const KATHMANDU = { latitude: 27.7172, longitude: 85.324 };
 
-/** Registers a provider through the public API (PENDING_VERIFICATION). */
+/** Registers a provider through the public API (PENDING_VERIFICATION) and verifies the email. */
 export async function registerProvider(
   ctx: TestContext,
   overrides: Record<string, unknown> = {},
@@ -32,20 +32,18 @@ export async function registerProvider(
     });
   if (res.status !== 201)
     throw new Error(`provider registration failed: ${JSON.stringify(res.body)}`);
-  const body = res.body as {
-    data: { accessToken: string; refreshToken: string; user: { id: string } };
-  };
+  const session = await verifyEmail(ctx, email);
   const provider = await ctx.prisma.provider.findUniqueOrThrow({
-    where: { userId: body.data.user.id },
+    where: { userId: session.user.id },
   });
   return {
-    id: body.data.user.id,
+    id: session.user.id,
     email,
     phone,
     role: 'PROVIDER',
-    accessToken: body.data.accessToken,
-    refreshToken: body.data.refreshToken,
-    auth: { Authorization: `Bearer ${body.data.accessToken}` },
+    accessToken: session.accessToken,
+    refreshToken: session.refreshToken,
+    auth: { Authorization: `Bearer ${session.accessToken}` },
     providerId: provider.id,
   };
 }

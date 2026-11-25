@@ -35,7 +35,11 @@ describe('Users & Addresses (e2e)', () => {
         .set(customer.auth)
         .send({ fullName: '  Aarati S  ', email: 'NEW@Example.com' })
         .expect(200);
-      expect(res.body.data).toMatchObject({ fullName: 'Aarati S', email: 'new@example.com' });
+      expect(res.body.data).toMatchObject({
+        fullName: 'Aarati S',
+        email: 'new@example.com',
+        emailVerified: false,
+      });
       const me = await ctx.http().get('/api/v1/users/me').set(customer.auth).expect(200);
       expect(me.body.data.fullName).toBe('Aarati S');
     });

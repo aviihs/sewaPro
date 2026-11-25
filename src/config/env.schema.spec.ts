@@ -45,7 +45,14 @@ describe('validateEnv', () => {
   });
 
   it('requires docs credentials when docs are enabled in production', () => {
-    const prod = { ...base, NODE_ENV: 'production', CORS_ORIGINS: 'https://sewapro.com' };
+    const prod = {
+      ...base,
+      NODE_ENV: 'production',
+      CORS_ORIGINS: 'https://sewapro.com',
+      EMAIL_PROVIDER: 'resend',
+      RESEND_API_KEY: 're_key',
+      EMAIL_FROM: 'SewaPro <no-reply@sewapro.com>',
+    };
     expect(() => validateEnv({ ...prod, SWAGGER_ENABLED: 'true' })).toThrow(/SWAGGER_PASSWORD/);
     expect(
       validateEnv({
@@ -55,5 +62,16 @@ describe('validateEnv', () => {
         SWAGGER_PASSWORD: 'a-long-password',
       }).SWAGGER_ENABLED,
     ).toBe(true);
+  });
+
+  it('needs Resend credentials for resend, and a real provider in production', () => {
+    expect(validateEnv(base).EMAIL_PROVIDER).toBe('console');
+    expect(() => validateEnv({ ...base, EMAIL_PROVIDER: 'resend', RESEND_API_KEY: '' })).toThrow(
+      /RESEND_API_KEY/,
+    );
+    const prod = { ...base, NODE_ENV: 'production', CORS_ORIGINS: 'https://sewapro.com' };
+    expect(() => validateEnv(prod)).toThrow(/EMAIL_PROVIDER/);
+    const resend = { EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_key', EMAIL_FROM: 'a@b.co' };
+    expect(validateEnv({ ...prod, ...resend }).RESEND_API_KEY).toBe('re_key');
   });
 });

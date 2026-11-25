@@ -15,6 +15,12 @@ const commaList = z
       .filter((item) => item.length > 0),
   );
 
+/** Optional text where an empty value (`KEY=` in a .env file) means "not set". */
+const optionalText = z
+  .string()
+  .optional()
+  .transform((value) => (value?.trim() ? value.trim() : undefined));
+
 /** Secrets must be long random strings (e.g. `openssl rand -base64 48`). */
 const secret = z.string().min(32, 'must be at least 32 characters');
 
@@ -50,6 +56,10 @@ export const envSchema = z
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
     OTP_PEPPER: secret,
 
+    EMAIL_PROVIDER: z.enum(['console', 'resend']).default('console'),
+    RESEND_API_KEY: optionalText,
+    EMAIL_FROM: optionalText,
+
     PUBLIC_BASE_URL: z.url().default('http://localhost:3000'),
     STORAGE_DIR: z.string().min(1).default('./storage'),
     STORAGE_SIGNING_SECRET: secret,
@@ -63,6 +73,21 @@ export const envSchema = z
         path: ['SWAGGER_PASSWORD'],
         message:
           'SWAGGER_USER and SWAGGER_PASSWORD are required when docs are enabled in production',
+      });
+    }
+    if (env.EMAIL_PROVIDER === 'resend' && (!env.RESEND_API_KEY || !env.EMAIL_FROM)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['RESEND_API_KEY'],
+        message: 'RESEND_API_KEY and EMAIL_FROM are required when EMAIL_PROVIDER=resend',
+      });
+    }
+    if (env.NODE_ENV === 'production' && env.EMAIL_PROVIDER === 'console') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['EMAIL_PROVIDER'],
+        message:
+          'production needs a real email provider (EMAIL_PROVIDER=resend) for verification codes',
       });
     }
     if (env.NODE_ENV === 'production' && env.CORS_ORIGINS.length === 0) {

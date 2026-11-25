@@ -40,9 +40,24 @@ export async function createUser(
       email,
       phone,
       passwordHash: await hasher.hash(TEST_PASSWORD),
+      emailVerifiedAt: new Date(),
     },
   });
   return signIn(ctx, { id: user.id, email, phone, role });
+}
+
+interface SessionBody {
+  readonly accessToken: string;
+  readonly refreshToken: string;
+  readonly user: { readonly id: string };
+}
+
+/** Confirms the email with the last emailed code; returns the session it starts. */
+export async function verifyEmail(ctx: TestContext, email: string): Promise<SessionBody> {
+  const code = ctx.email.lastCodeFor(email, /Verify/);
+  const res = await ctx.http().post('/api/v1/auth/verify-email').send({ email, code });
+  if (res.status !== 200) throw new Error(`verify-email failed: ${JSON.stringify(res.body)}`);
+  return (res.body as { data: SessionBody }).data;
 }
 
 export async function signIn(

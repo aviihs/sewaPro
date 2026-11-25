@@ -6,11 +6,11 @@ import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
 import { configureApp } from '../../src/bootstrap/configure-app.js';
 import { setupSwagger } from '../../src/bootstrap/swagger.js';
-import { SmsSender } from '../../src/common/ports/messaging.port.js';
+import { EmailSender, SmsSender } from '../../src/common/ports/messaging.port.js';
 import { AppConfigService } from '../../src/config/app-config.service.js';
 import { type Env } from '../../src/config/env.schema.js';
 import { PrismaService } from '../../src/infrastructure/prisma/prisma.service.js';
-import { CapturingSmsSender } from './fakes.js';
+import { CapturingEmailSender, CapturingSmsSender } from './fakes.js';
 
 export interface TestAppOptions {
   readonly controllers?: Type[];
@@ -32,18 +32,22 @@ export interface TestContext {
   readonly app: NestExpressApplication;
   readonly prisma: PrismaService;
   readonly sms: CapturingSmsSender;
+  readonly email: CapturingEmailSender;
   readonly http: () => ReturnType<typeof request>;
 }
 
-/** Boots the real AppModule with the production HTTP pipeline; SMS is captured in memory. */
+/** Boots the real AppModule with the production HTTP pipeline; SMS and email are captured in memory. */
 export async function createTestApp(options: TestAppOptions = {}): Promise<TestContext> {
   const sms = new CapturingSmsSender();
+  const email = new CapturingEmailSender();
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
     controllers: options.controllers ?? [],
   })
     .overrideProvider(SmsSender)
     .useValue(sms)
+    .overrideProvider(EmailSender)
+    .useValue(email)
     .overrideProvider(AppConfigService)
     .useFactory({
       factory: (config: ConfigService<Env, true>) => configWith(config, options),
@@ -59,6 +63,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestC
     app,
     prisma: app.get(PrismaService),
     sms,
+    email,
     http: () => request(app.getHttpServer()),
   };
 }

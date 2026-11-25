@@ -22,13 +22,17 @@ export class ConsoleSmsSender extends SmsSender {
   }
 }
 
-@Injectable()
 export class ConsoleEmailSender extends EmailSender {
   private readonly logger = new Logger('Email');
 
-  send(to: string, subject: string, _body: string): Promise<void> {
+  constructor(private readonly revealContent: boolean) {
+    super();
+  }
+
+  send(to: string, subject: string, body: string): Promise<void> {
     const domain = to.slice(to.indexOf('@'));
-    this.logger.log(`to ***${domain}: ${subject}`);
+    const content = this.revealContent ? ` | ${body.replace(/\s+/g, ' ')}` : '';
+    this.logger.log(`to ***${domain}: ${subject}${content}`);
     return Promise.resolve();
   }
 }

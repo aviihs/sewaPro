@@ -5,7 +5,7 @@ import { aUser } from '../../../../test/unit/fixtures/users.js';
 import { FakeUnitOfWork, FixedClock, mockOf } from '../../../../test/unit/mock.js';
 import { Clock } from '../../../common/ports/clock.port.js';
 import { PasswordHasher } from '../../../common/ports/password-hasher.port.js';
-import { SessionIssuer } from '../../auth/application/session-issuer.js';
+import { EmailCodes } from '../../auth/application/email-codes.js';
 import {
   CategoryRepository,
   ServiceRepository,
@@ -46,19 +46,15 @@ beforeEach(() => {
 });
 
 describe('RegisterProviderUseCase', () => {
-  it('creates a PENDING provider account and profile in one transaction, then signs in', async () => {
+  it('creates a PENDING provider account and profile in one transaction, then emails a code', async () => {
     const users = mockOf<UserRepository>();
     const hasher = mockOf<PasswordHasher>();
-    const sessions = mockOf<SessionIssuer>();
+    const codes = mockOf<EmailCodes>();
     const uow = new FakeUnitOfWork();
     hasher.hash.mockResolvedValue('hash');
-    users.create.mockResolvedValue(aUser({ id: 'u-p', role: 'PROVIDER', status: 'PENDING' }));
-    sessions.start.mockResolvedValue({
-      accessToken: 'a',
-      refreshToken: 'r',
-      expiresIn: 900,
-      user: aUser(),
-    });
+    const created = aUser({ id: 'u-p', role: 'PROVIDER', status: 'PENDING', fullName: 'Ram' });
+    users.create.mockResolvedValue(created);
+    codes.send.mockResolvedValue(true);
     const input = {
       fullName: 'Ram',
       email: 'ram@x.com',
@@ -72,24 +68,33 @@ describe('RegisterProviderUseCase', () => {
       serviceRadiusKm: 8,
     };
 
-    await new RegisterProviderUseCase(users, providers, hasher, sessions, clock, uow).execute(
-      input,
-      {
-        ipAddress: null,
-        userAgent: null,
-        requestId: null,
-      },
-    );
+    const result = await new RegisterProviderUseCase(
+      users,
+      providers,
+      hasher,
+      codes,
+      clock,
+      uow,
+    ).execute(input);
 
     expect(uow.runs).toBe(1);
     expect(users.create).toHaveBeenCalledWith(
-      expect.objectContaining({ role: 'PROVIDER', status: 'PENDING', passwordHash: 'hash' }),
+      expect.objectContaining({
+        role: 'PROVIDER',
+        status: 'PENDING',
+        passwordHash: 'hash',
+        emailVerifiedAt: null,
+      }),
     );
     expect(providers.create).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'u-p', serviceRadiusKm: 8, submittedAt: clock.now() }),
       { maxDailyBookings: 5, slotMinutes: 60 },
     );
-    expect(sessions.start).toHaveBeenCalled();
+    expect(codes.send).toHaveBeenCalledWith('ram@x.com', 'EMAIL_VERIFICATION', 'Ram');
+    expect(result).toEqual({
+      user: created,
+      verification: { expiresInSeconds: 600, resendAfterSeconds: 60 },
+    });
   });
 });
 

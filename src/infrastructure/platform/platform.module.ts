@@ -10,6 +10,7 @@ import {
   ConsolePushSender,
   ConsoleSmsSender,
 } from '../messaging/console-messaging.adapters.js';
+import { ResendEmailSender } from '../messaging/resend-email.sender.js';
 import { PrismaAuditTrail } from '../audit/prisma-audit-trail.js';
 import { EventEmitterPublisher } from '../events/event-emitter.publisher.js';
 import { Argon2PasswordHasher } from '../security/argon2-password-hasher.js';
@@ -32,7 +33,16 @@ export class SystemClock extends Clock {
       inject: [AppConfigService],
       useFactory: (config: AppConfigService) => new ConsoleSmsSender(!config.isProduction),
     },
-    { provide: EmailSender, useClass: ConsoleEmailSender },
+    {
+      provide: EmailSender,
+      inject: [AppConfigService],
+      useFactory: (config: AppConfigService): EmailSender => {
+        const email = config.email;
+        return email.provider === 'resend'
+          ? new ResendEmailSender(email)
+          : new ConsoleEmailSender(!config.isProduction);
+      },
+    },
     { provide: PushSender, useClass: ConsolePushSender },
     { provide: AuditTrail, useClass: PrismaAuditTrail },
     { provide: DomainEventPublisher, useClass: EventEmitterPublisher },

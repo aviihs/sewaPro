@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SAMPLE_FILES } from './unit/fixtures/files.js';
-import { TEST_PASSWORD, createUser } from './utils/auth.js';
+import { TEST_PASSWORD, createUser, verifyEmail } from './utils/auth.js';
 import { BALUWATAR, nepalSlot } from './utils/bookings.js';
 import { type TestContext, createTestApp } from './utils/create-test-app.js';
 import { resetDatabase } from './utils/database.js';
@@ -38,7 +38,7 @@ describe('Full flow (e2e): onboarding → verification → booking → quotation
       .expect(201);
     const serviceId = service.body.data.id as string;
 
-    const customerReg = await http()
+    await http()
       .post(api('/auth/register'))
       .send({
         fullName: 'Aarati Sharma',
@@ -47,8 +47,9 @@ describe('Full flow (e2e): onboarding → verification → booking → quotation
         password: TEST_PASSWORD,
       })
       .expect(201);
-    const customer = { Authorization: `Bearer ${customerReg.body.data.accessToken as string}` };
-    const providerReg = await http()
+    const customerSession = await verifyEmail(ctx, 'aarati@flow.test');
+    const customer = { Authorization: `Bearer ${customerSession.accessToken}` };
+    await http()
       .post(api('/providers/register'))
       .send({
         fullName: 'Ram Thapa',
@@ -62,7 +63,8 @@ describe('Full flow (e2e): onboarding → verification → booking → quotation
         serviceRadiusKm: 12,
       })
       .expect(201);
-    const provider = { Authorization: `Bearer ${providerReg.body.data.accessToken as string}` };
+    const providerSession = await verifyEmail(ctx, 'ram@flow.test');
+    const provider = { Authorization: `Bearer ${providerSession.accessToken}` };
 
     await http()
       .post(api('/providers/me/documents'))

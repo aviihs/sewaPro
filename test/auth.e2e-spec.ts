@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { TEST_PASSWORD, createUser, nextPhone } from './utils/auth.js';
+import { TEST_PASSWORD, createUser, nextPhone, verifyEmail } from './utils/auth.js';
 import { type TestContext, createTestApp } from './utils/create-test-app.js';
 import { resetDatabase } from './utils/database.js';
 
@@ -25,21 +25,22 @@ describe('Auth (e2e)', () => {
   });
 
   describe('register + login', () => {
-    it('registers a customer, normalizes input and never returns the hash', async () => {
+    it('registers a customer without a session, emails a code and never returns the hash', async () => {
       const body = registration();
       const res = await post('register', body).expect(201);
 
-      expect(res.body.data).toMatchObject({
-        tokenType: 'Bearer',
-        expiresIn: 900,
-        user: {
+      expect(res.body.data).toEqual({
+        user: expect.objectContaining({
           role: 'CUSTOMER',
           status: 'ACTIVE',
           email: body.email.toLowerCase(),
           phone: `+977${body.phone}`,
           phoneVerified: false,
-        },
+          emailVerified: false,
+        }),
+        verification: { expiresInSeconds: 600, resendAfterSeconds: 60 },
       });
+      expect(ctx.email.lastCodeFor(body.email.toLowerCase())).toMatch(/^\d{6}$/);
       expect(JSON.stringify(res.body)).not.toMatch(/passwordHash|argon2/);
       const stored = await ctx.prisma.user.findFirstOrThrow({
         where: { phone: `+977${body.phone}` },
@@ -68,6 +69,7 @@ describe('Auth (e2e)', () => {
     it('logs in and gives the same error for unknown email and wrong password', async () => {
       const body = registration();
       await post('register', body).expect(201);
+      await verifyEmail(ctx, body.email.toLowerCase());
       await post('login', { email: body.email, password: TEST_PASSWORD }).expect(200);
 
       const wrong = await post('login', { email: body.email, password: 'Wrong12345' }).expect(401);
@@ -139,61 +141,116 @@ describe('Auth (e2e)', () => {
     });
   });
 
-  describe('phone OTP', () => {
-    it('creates an account on first verified sign-in', async () => {
-      const phone = nextPhone();
-      const sent = await post('send-otp', { phone }).expect(200);
-      expect(sent.body.data).toEqual({ expiresInSeconds: 300, resendAfterSeconds: 60 });
-      const code = ctx.sms.lastCodeFor(phone);
+  describe('email verification', () => {
+    const registered = async (): Promise<string> => {
+      const body = registration();
+      await post('register', body).expect(201);
+      return body.email.toLowerCase();
+    };
 
-      const noName = await post('verify-otp', { phone, code }).expect(422);
-      expect(noName.body.error.code).toBe('FULL_NAME_REQUIRED');
+    it('blocks login until verified; the code signs in once and stores only a hash', async () => {
+      const email = await registered();
+      const blocked = await post('login', { email, password: TEST_PASSWORD }).expect(403);
+      expect(blocked.body.error.code).toBe('EMAIL_NOT_VERIFIED');
+      const wrongPassword = await post('login', { email, password: 'Wrong12345' }).expect(401);
+      expect(wrongPassword.body.error.code).toBe('INVALID_CREDENTIALS');
 
-      const res = await post('verify-otp', { phone, code, fullName: 'Nabin Rai' }).expect(200);
-      expect(res.body.data.user).toMatchObject({
-        phone,
-        fullName: 'Nabin Rai',
-        phoneVerified: true,
-      });
-      const reuse = await post('verify-otp', { phone, code, fullName: 'Nabin Rai' }).expect(401);
-      expect(reuse.body.error.code).toBe('OTP_INVALID');
-    });
-
-    it('signs in an existing user and stores only a hash of the code', async () => {
-      const user = await createUser(ctx, 'CUSTOMER');
-      await post('send-otp', { phone: user.phone }).expect(200);
-      const code = ctx.sms.lastCodeFor(user.phone);
-      const row = await ctx.prisma.otpCode.findFirstOrThrow({ where: { phone: user.phone } });
+      const code = ctx.email.lastCodeFor(email);
+      const row = await ctx.prisma.otpCode.findFirstOrThrow({ where: { recipient: email } });
       expect(row.codeHash).not.toContain(code);
 
-      const res = await post('verify-otp', { phone: user.phone, code }).expect(200);
-      expect(res.body.data.user.id).toBe(user.id);
+      const res = await post('verify-email', { email, code }).expect(200);
+      expect(res.body.data).toMatchObject({ tokenType: 'Bearer', user: { emailVerified: true } });
+      const reuse = await post('verify-email', { email, code }).expect(401);
+      expect(reuse.body.error.code).toBe('OTP_INVALID');
+      await post('login', { email, password: TEST_PASSWORD }).expect(200);
     });
 
     it('burns the code after 5 wrong attempts', async () => {
-      const phone = nextPhone();
-      await post('send-otp', { phone }).expect(200);
-      const code = ctx.sms.lastCodeFor(phone);
+      const email = await registered();
+      const code = ctx.email.lastCodeFor(email);
       const wrong = code === '000000' ? '111111' : '000000';
-      for (let i = 0; i < 5; i += 1) {
-        await post('verify-otp', { phone, code: wrong, fullName: 'X Y' }).expect(401);
+      for (let i = 0; i < 5; i += 1) await post('verify-email', { email, code: wrong }).expect(401);
+      await post('verify-email', { email, code }).expect(401);
+    });
+
+    it('resends with a cooldown and answers the same for unknown or verified emails', async () => {
+      const email = await registered();
+      const sent = { expiresInSeconds: 600, resendAfterSeconds: 60 };
+      const verified = await createUser(ctx, 'CUSTOMER');
+      for (const target of [email, 'nobody@example.com', verified.email]) {
+        expect(
+          (await post('resend-verification', { email: target }).expect(200)).body.data,
+        ).toEqual(sent);
       }
-      await post('verify-otp', { phone, code, fullName: 'X Y' }).expect(401);
-    });
+      expect(ctx.email.countFor(email)).toBe(1);
+      expect(ctx.email.countFor(verified.email)).toBe(0);
 
-    it('rate-limits sends per phone', async () => {
-      const phone = nextPhone();
-      await post('send-otp', { phone }).expect(200);
-      const res = await post('send-otp', { phone }).expect(429);
-      expect(res.body.error).toMatchObject({
-        code: 'OTP_RATE_LIMITED',
-        details: { retryAfterSeconds: 60 },
+      await ctx.prisma.otpCode.updateMany({
+        where: { recipient: email },
+        data: { createdAt: new Date(Date.now() - 120_000) },
       });
+      await post('resend-verification', { email }).expect(200);
+      expect(ctx.email.countFor(email)).toBe(2);
+      await verifyEmail(ctx, email);
     });
 
-    it('validates phone and code format', async () => {
-      await post('send-otp', { phone: '0123' }).expect(400);
-      await post('verify-otp', { phone: nextPhone(), code: '12ab' }).expect(400);
+    it('validates email and code format', async () => {
+      await post('verify-email', { email: 'not-an-email', code: '12ab' }).expect(400);
+      await post('resend-verification', {}).expect(400);
     });
+  });
+
+  describe('password reset and change', () => {
+    it('resets with an emailed code and signs out every session', async () => {
+      const user = await createUser(ctx, 'CUSTOMER');
+      const unknown = await post('forgot-password', { email: 'nobody@example.com' }).expect(200);
+      const known = await post('forgot-password', { email: user.email }).expect(200);
+      expect(known.body.data).toEqual(unknown.body.data);
+
+      const code = ctx.email.lastCodeFor(user.email, /Reset/);
+      const newPassword = 'Pokhara2031';
+      const wrong = code === '000000' ? '111111' : '000000';
+      await post('reset-password', { email: user.email, code: wrong, newPassword }).expect(401);
+      await post('reset-password', { email: user.email, code, newPassword }).expect(204);
+
+      await post('refresh', { refreshToken: user.refreshToken }).expect(401);
+      await post('login', { email: user.email, password: TEST_PASSWORD }).expect(401);
+      await post('login', { email: user.email, password: newPassword }).expect(200);
+      await post('reset-password', { email: user.email, code, newPassword }).expect(401);
+    });
+
+    it('a reset code also verifies an unverified email', async () => {
+      const body = registration();
+      const email = body.email.toLowerCase();
+      await post('register', body).expect(201);
+      await post('forgot-password', { email }).expect(200);
+      const code = ctx.email.lastCodeFor(email, /Reset/);
+      await post('reset-password', { email, code, newPassword: 'Pokhara2031' }).expect(204);
+      await post('login', { email, password: 'Pokhara2031' }).expect(200);
+    });
+
+    it('changes the password with the current one and rotates sessions', async () => {
+      const user = await createUser(ctx, 'CUSTOMER');
+      const change = (body: object) =>
+        ctx.http().post('/api/v1/auth/change-password').set(user.auth).send(body);
+
+      const wrong = await change({ currentPassword: 'Wrong12345', newPassword: 'Pokhara2031' });
+      expect(wrong.status).toBe(422);
+      expect(wrong.body.error.code).toBe('CURRENT_PASSWORD_INCORRECT');
+      await change({ currentPassword: TEST_PASSWORD, newPassword: 'short' }).expect(400);
+
+      const res = await change({ currentPassword: TEST_PASSWORD, newPassword: 'Pokhara2031' });
+      expect(res.status).toBe(200);
+      await post('refresh', { refreshToken: user.refreshToken }).expect(401);
+      await post('refresh', { refreshToken: res.body.data.refreshToken }).expect(200);
+      await post('login', { email: user.email, password: 'Pokhara2031' }).expect(200);
+      await ctx.http().post('/api/v1/auth/change-password').send({}).expect(401);
+    });
+  });
+
+  it('no longer offers phone OTP login', async () => {
+    await post('send-otp', { phone: nextPhone() }).expect(404);
+    await post('verify-otp', { phone: nextPhone(), code: '123456' }).expect(404);
   });
 });

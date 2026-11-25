@@ -3,16 +3,15 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   CurrentUser,
   Public,
-  ReqContext,
   Roles,
   SensitiveRateLimit,
 } from '../../../common/auth/auth.decorators.js';
-import { type AuthenticatedUser, type RequestContext, Role } from '../../../common/auth/role.js';
+import { type AuthenticatedUser, Role } from '../../../common/auth/role.js';
 import { ApiEnvelopeResponse } from '../../../common/decorators/api-envelope-response.decorator.js';
 import { ApiAuth, ApiErrors } from '../../../common/decorators/api-docs.decorator.js';
 import {
-  AuthSessionResponseDto,
-  toAuthSessionResponse,
+  RegistrationResponseDto,
+  toRegistrationResponse,
 } from '../../auth/presentation/dto/auth.response.dto.js';
 import {
   GetEarningsSummaryUseCase,
@@ -53,17 +52,15 @@ export class MyProviderProfileController {
   @SensitiveRateLimit()
   @Post('register')
   @ApiOperation({
-    summary: 'Register as a provider (account + profile pending verification), signed in',
+    summary:
+      'Register as a provider (account + profile pending verification); emails a verification code',
   })
-  @ApiEnvelopeResponse(AuthSessionResponseDto, {
-    description: 'Registered',
+  @ApiEnvelopeResponse(RegistrationResponseDto, {
+    description: 'Registered; verify the email (POST /auth/verify-email) to sign in',
     status: HttpStatus.CREATED,
   })
   @ApiErrors(400, 409, 429)
-  async register(
-    @Body() body: RegisterProviderRequestDto,
-    @ReqContext() context: RequestContext,
-  ): Promise<AuthSessionResponseDto> {
+  async register(@Body() body: RegisterProviderRequestDto): Promise<RegistrationResponseDto> {
     const input = {
       fullName: body.fullName,
       email: body.email,
@@ -76,7 +73,7 @@ export class MyProviderProfileController {
       longitude: body.longitude,
       serviceRadiusKm: body.serviceRadiusKm,
     };
-    return toAuthSessionResponse(await this.registerProvider.execute(input, context));
+    return toRegistrationResponse(await this.registerProvider.execute(input));
   }
 
   @Get('me')

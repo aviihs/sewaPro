@@ -16,7 +16,8 @@ function serviceFor(raw: Record<string, string>): AppConfigService {
   return new AppConfigService(config);
 }
 
-const production = { NODE_ENV: 'production', CORS_ORIGINS: 'https://sewapro.com' };
+const resend = { EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_key', EMAIL_FROM: 'a@b.co' };
+const production = { NODE_ENV: 'production', CORS_ORIGINS: 'https://sewapro.com', ...resend };
 
 describe('AppConfigService', () => {
   it('exposes typed runtime settings', () => {
@@ -80,6 +81,15 @@ describe('AppConfigService', () => {
     expect(config.swagger).toEqual({
       enabled: true,
       credentials: { user: 'docs', password: 'a-long-password' },
+    });
+  });
+
+  it('selects the email provider', () => {
+    expect(serviceFor({}).email).toEqual({ provider: 'console' });
+    expect(serviceFor(resend).email).toEqual({
+      provider: 'resend',
+      apiKey: 're_key',
+      from: 'a@b.co',
     });
   });
 });

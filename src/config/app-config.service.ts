@@ -22,6 +22,10 @@ export interface StorageConfig {
   readonly publicBaseUrl: string;
 }
 
+export type EmailConfig =
+  | { readonly provider: 'console' }
+  | { readonly provider: 'resend'; readonly apiKey: string; readonly from: string };
+
 export interface SwaggerConfig {
   readonly enabled: boolean;
   readonly credentials: { readonly user: string; readonly password: string } | null;
@@ -74,6 +78,15 @@ export class AppConfigService {
       ttlMs: this.get('SENSITIVE_THROTTLE_TTL_MS'),
       limit: this.get('SENSITIVE_THROTTLE_LIMIT'),
     };
+  }
+
+  get email(): EmailConfig {
+    const apiKey = this.get('RESEND_API_KEY');
+    const from = this.get('EMAIL_FROM');
+    if (this.get('EMAIL_PROVIDER') === 'resend' && apiKey && from) {
+      return { provider: 'resend', apiKey, from };
+    }
+    return { provider: 'console' };
   }
 
   get auth(): AuthConfig {

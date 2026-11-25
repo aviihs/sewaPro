@@ -45,7 +45,13 @@ describe('users use cases', () => {
       await useCase.execute('user-1', { email: 'new@example.com' });
       await useCase.execute('user-1', { email: 'aarati@example.com' });
       expect(users.findByEmail).toHaveBeenCalledTimes(1);
-      expect(users.updateProfile).toHaveBeenCalledTimes(2);
+      expect(users.updateProfile).toHaveBeenNthCalledWith(1, 'user-1', {
+        email: 'new@example.com',
+        emailVerifiedAt: null,
+      });
+      expect(users.updateProfile).toHaveBeenNthCalledWith(2, 'user-1', {
+        email: 'aarati@example.com',
+      });
     });
 
     it('rejects an email owned by someone else', async () => {
